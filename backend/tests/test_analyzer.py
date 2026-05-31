@@ -55,9 +55,9 @@ def _request(language: str = "es") -> AnalysisRequest:
 # --------------------------------------------------------------------------- #
 async def test_call_gemini_returns_text(monkeypatch):
     gen = install_fake_client(monkeypatch, return_value=gemini_response(VALID_JSON))
-    out = await analyzer._call_gemini(prompt="p", model="gemini-2.5-pro")
+    out = await analyzer._call_gemini(prompt="p")
     assert out == VALID_JSON
-    assert gen.call_count == 1
+    assert gen.call_count == 1  # first model succeeds, no fallback
 
 
 async def test_valid_json_flows_through_to_contract(monkeypatch):
@@ -88,36 +88,60 @@ async def test_timeout_then_success(monkeypatch):
         monkeypatch,
         side_effect=[asyncio.TimeoutError(), gemini_response(VALID_JSON)],
     )
-    out = await analyzer._call_gemini(prompt="p", model="m")
+    out = await analyzer._call_gemini(prompt="p")
     assert out == VALID_JSON
-    assert gen.call_count == 2  # first timed out, second succeeded
+    assert gen.call_count == 2  # first timed out, second (same model) succeeded
 
 
 # --------------------------------------------------------------------------- #
-# 4. Always 503 -> retries exhausted -> 502
+# 4. Always 503 -> retries + full cascade exhausted -> 502
 # --------------------------------------------------------------------------- #
-async def test_always_503_exhausts_to_502(monkeypatch):
+async def test_always_503_exhausts_cascade_to_502(monkeypatch):
     gen = install_fake_client(monkeypatch, side_effect=make_api_error(503))
     with pytest.raises(HTTPException) as exc:
-        await analyzer._call_gemini(prompt="p", model="m")
+        await analyzer._call_gemini(prompt="p")
     assert exc.value.status_code == 502
-    assert gen.call_count == analyzer.MAX_ATTEMPTS  # all attempts used
+    # Every model retried fully before giving up.
+    assert gen.call_count == analyzer.MAX_ATTEMPTS * len(analyzer.MODEL_CASCADE)
 
 
-async def test_always_429_also_retries(monkeypatch):
+async def test_always_429_exhausts_cascade(monkeypatch):
     gen = install_fake_client(monkeypatch, side_effect=make_api_error(429))
     with pytest.raises(HTTPException) as exc:
-        await analyzer._call_gemini(prompt="p", model="m")
+        await analyzer._call_gemini(prompt="p")
     assert exc.value.status_code == 502
-    assert gen.call_count == analyzer.MAX_ATTEMPTS
+    assert gen.call_count == analyzer.MAX_ATTEMPTS * len(analyzer.MODEL_CASCADE)
 
 
 # --------------------------------------------------------------------------- #
-# 5. Non-retryable 400 -> immediate 502, no retry
+# 5. Non-retryable 400 -> no per-model retry, but still falls back -> 502
 # --------------------------------------------------------------------------- #
-async def test_non_retryable_400_immediate_502(monkeypatch):
+async def test_non_retryable_400_no_retry_per_model(monkeypatch):
     gen = install_fake_client(monkeypatch, side_effect=make_api_error(400))
     with pytest.raises(HTTPException) as exc:
-        await analyzer._call_gemini(prompt="p", model="m")
+        await analyzer._call_gemini(prompt="p")
     assert exc.value.status_code == 502
-    assert gen.call_count == 1  # failed fast, no retry
+    # One attempt per model (no retries), across the whole cascade.
+    assert gen.call_count == len(analyzer.MODEL_CASCADE)
+
+
+# --------------------------------------------------------------------------- #
+# 6. Model fallback: primary 429-exhausts, secondary succeeds
+# --------------------------------------------------------------------------- #
+async def test_fallback_to_second_model_on_429(monkeypatch):
+    primary, secondary = analyzer.MODEL_CASCADE[0], analyzer.MODEL_CASCADE[1]
+
+    def behavior(*_args, model, contents, config):
+        if model == primary:
+            raise make_api_error(429)  # primary always rate-limited
+        return gemini_response(VALID_JSON)  # fallback model works
+
+    gen = install_fake_client(monkeypatch, side_effect=behavior)
+    out = await analyzer._call_gemini(prompt="p")
+
+    assert out == VALID_JSON
+    # primary exhausts its retries, then secondary succeeds on first try.
+    assert gen.call_count == analyzer.MAX_ATTEMPTS + 1
+    used_models = [c.kwargs["model"] for c in gen.call_args_list]
+    assert used_models[-1] == secondary
+    assert used_models.count(primary) == analyzer.MAX_ATTEMPTS

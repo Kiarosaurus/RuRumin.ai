@@ -18,6 +18,7 @@ toast can show a clear message.
 from __future__ import annotations
 
 import asyncio
+import logging
 import uuid
 
 from fastapi import HTTPException, status
@@ -38,11 +39,22 @@ from app.models import (
 from app.prompts import build_layer_prompt
 from app.services.mapping import llm_output_to_layer
 
+logger = logging.getLogger("rurumin.analyzer")
+
 # --- Resilience tuning ----------------------------------------------------- #
 GEMINI_TIMEOUT_SECONDS = 60.0
-MAX_ATTEMPTS = 3  # 1 initial try + 2 retries
+MAX_ATTEMPTS = 3  # per model: 1 initial try + 2 retries
 RETRY_BACKOFF_SECONDS = 1.5  # multiplied by the attempt number
 RETRYABLE_STATUS = {429, 503}  # rate-limited / service unavailable
+
+# Model fallback cascade, highest capability first. When a model exhausts its
+# quota (429) or keeps failing, the next one is tried before giving up. Exact
+# google-genai model strings.
+MODEL_CASCADE: tuple[str, ...] = (
+    "gemini-2.5-pro",  # priority 1: strongest reasoning
+    "gemini-2.5-flash",  # priority 2: fast, large context
+    "gemini-2.5-flash-lite",  # priority 3: ultralight emergency fallback
+)
 
 # The SDK client is created once per process, lazily, so importing this module
 # does not require the key to be present (e.g. during unrelated imports/tests).
@@ -105,10 +117,9 @@ async def _analyze_layer(
         language=request.language,
     )
 
-    # 2. call the model -> raw JSON string in the prompt's schema
+    # 2. call the model cascade -> raw JSON string in the prompt's schema
     raw_output = await _call_gemini(
         prompt=prompt,
-        model=request.options.model,
         language=request.language,
     )
 
@@ -157,29 +168,28 @@ _SYSTEM_INSTRUCTION: dict[str, str] = {
 }
 
 
-async def _call_gemini(prompt: str, model: str, language: str = "es") -> str:
+class _ModelExhausted(Exception):
+    """One model gave up (retries exhausted or non-retryable error)."""
+
+    def __init__(self, cause: Exception | None):
+        super().__init__(str(cause))
+        self.cause = cause
+
+
+async def _attempt_model(
+    client: genai.Client,
+    prompt: str,
+    config: genai_types.GenerateContentConfig,
+    model: str,
+) -> str:
     """
-    Call the Gemini model and return its raw text response.
+    Try a single model with timeout + bounded retries.
 
-    Resilience:
-      * each attempt is bounded by GEMINI_TIMEOUT_SECONDS;
-      * transient failures (timeout, HTTP 429/503) are retried up to
-        MAX_ATTEMPTS with linear backoff;
-      * any other API error, or exhausting the retries, raises HTTP 502 so the
-        frontend can surface it in a toast.
-
-    The model is asked for JSON (`response_mime_type="application/json"`), so the
-    return value is a JSON string ready for `LayerLLMOutput.parse_model_text`.
-
-    @raises app.config.ConfigError if GEMINI_API_KEY is missing.
-    @raises fastapi.HTTPException(502) on unrecoverable upstream failure.
+    Retries transient failures (timeout, 429/503) up to MAX_ATTEMPTS with linear
+    backoff. Raises `_ModelExhausted` when the model gives up — either after
+    exhausting retries or on the first non-retryable API error — so the caller
+    can fall back to the next model.
     """
-    client = _get_client()
-    config = genai_types.GenerateContentConfig(
-        response_mime_type="application/json",
-        system_instruction=_SYSTEM_INSTRUCTION.get(language, _SYSTEM_INSTRUCTION["es"]),
-    )
-
     last_error: Exception | None = None
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
@@ -197,20 +207,58 @@ async def _call_gemini(prompt: str, model: str, language: str = "es") -> str:
         except genai_errors.APIError as exc:
             last_error = exc
             if not _is_retryable(exc):
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail=f"Error de Gemini ({getattr(exc, 'code', 'desconocido')}): {exc}",
-                ) from exc
+                # Non-retryable (e.g. 400): stop this model, let caller fall back.
+                raise _ModelExhausted(exc) from exc
 
-        # Reached only on a retryable failure: back off before the next attempt.
         if attempt < MAX_ATTEMPTS:
             await asyncio.sleep(RETRY_BACKOFF_SECONDS * attempt)
+
+    raise _ModelExhausted(last_error)
+
+
+async def _call_gemini(prompt: str, language: str = "es") -> str:
+    """
+    Call the model cascade and return the first successful raw JSON response.
+
+    Iterates `MODEL_CASCADE` in priority order. Each model gets the full
+    timeout + retry budget (`_attempt_model`); if it is exhausted (quota/429,
+    repeated 503/timeouts, or a non-retryable error) a warning is logged and the
+    next, lighter model is tried. HTTP 502 is raised only when every model fails.
+
+    The model is asked for JSON (`response_mime_type="application/json"`), so the
+    return value is ready for `LayerLLMOutput.parse_model_text`.
+
+    @raises app.config.ConfigError if GEMINI_API_KEY is missing.
+    @raises fastapi.HTTPException(502) when the whole cascade is exhausted.
+    """
+    client = _get_client()
+    config = genai_types.GenerateContentConfig(
+        response_mime_type="application/json",
+        system_instruction=_SYSTEM_INSTRUCTION.get(language, _SYSTEM_INSTRUCTION["es"]),
+    )
+
+    last_error: Exception | None = None
+    for index, model in enumerate(MODEL_CASCADE):
+        try:
+            return await _attempt_model(client, prompt, config, model)
+        except _ModelExhausted as exc:
+            last_error = exc.cause
+            has_fallback = index < len(MODEL_CASCADE) - 1
+            if has_fallback:
+                next_model = MODEL_CASCADE[index + 1]
+                code = getattr(exc.cause, "code", type(exc.cause).__name__)
+                logger.warning(
+                    "Modelo '%s' agotado/falló (%s). Fallback a '%s'.",
+                    model,
+                    code,
+                    next_model,
+                )
 
     raise HTTPException(
         status_code=status.HTTP_502_BAD_GATEWAY,
         detail=(
-            f"Gemini no respondió correctamente tras {MAX_ATTEMPTS} intentos "
-            "(timeout o servicio sobrecargado). Intenta nuevamente."
+            "Ningún modelo de Gemini respondió correctamente tras agotar la "
+            "cascada de respaldo (cuota/timeout/servicio). Intenta nuevamente."
         ),
     ) from last_error
 
