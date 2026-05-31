@@ -1,0 +1,63 @@
+name: Release Desktop (Windows)
+
+# Build the Windows installer (.msi + NSIS .exe) for the Tauri app.
+# Triggers on a version tag (creates a GitHub Release) or manually.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build (src-tauri/target)
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: frontend/src-tauri -> target
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm install
+
+      - name: Build Tauri app (Windows installer)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          # Injected into the Vite build so the packaged .exe targets the
+          # deployed backend instead of localhost. Configure as a repo secret.
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+          # Required only when publishing a GitHub Release (tag pushes).
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # The Tauri project (package.json + src-tauri) lives under frontend/.
+          projectPath: frontend
+          # On a tag push, publish a draft Release with the installers attached.
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          releaseName: "RuRumin ${{ github.ref_name }}"
+          releaseDraft: true
+          prerelease: false
+
+      - name: Upload installers as workflow artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rurumin-windows-installers
+          path: |
+            frontend/src-tauri/target/release/bundle/msi/*.msi
+            frontend/src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: ignore
