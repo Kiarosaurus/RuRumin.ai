@@ -57,12 +57,20 @@ Reglas:
 - Extracción y Agrupación: identifica todas las ideas base y agrúpalas en \
 conceptos superiores coherentes.
 - Conceptos Ganadores (k-top): selecciona los {k_top} conceptos más fuertes. \
-Para cada uno asigna "k_top_score": un float entre 0.0 y 1.0 (mayor = más fuerte) \
-y explica detalladamente en "justificacion_agrupacion" por qué se agruparon.
+Para cada uno asigna "k_top_score": un float entre 0.0 y 1.0 (mayor = más \
+fuerte) y desarrolla en "justificacion_agrupacion" una explicación EXTENSA, \
+analítica y profunda de AL MENOS 3 a 4 párrafos bien desarrollados: por qué se \
+agruparon esas ideas, qué patrones, tensiones y matices revelan, su relevancia \
+para el tema y cómo se conectan con el resto de la entrevista.
+- Superposición (Overlap): una misma frase u oración (frase_origen) PUEDE y \
+DEBE pertenecer a múltiples conceptos_ganadores si su significado aporta a más \
+de un tema. Se permite la superposición total o parcial de frases entre \
+conceptos; no fuerces que cada frase pertenezca a un solo concepto.
 - Conceptos Descartados: identifica las ideas tangenciales o débiles que no \
 superaron el umbral. Para cada una asigna "motivo_descarte" (categoría corta, \
-ej. "redundante", "fuera_de_contexto") y un "analisis_descarte" crítico que \
-justifique por qué fue correcto descartarla.
+ej. "redundante", "fuera_de_contexto") y un "analisis_descarte" crítico, \
+EXTENSO y profundo de AL MENOS 3 a 4 párrafos que justifique por qué fue \
+correcto descartarla.
 - Deduplicación: fusiona en uno solo los conceptos casi idénticos y elimina las \
 frases de origen repetidas; nunca devuelvas dos conceptos ganadores que \
 signifiquen lo mismo.""",
@@ -79,11 +87,19 @@ Rules:
 higher-level concepts.
 - Winning Concepts (k-top): select the {k_top} strongest concepts. For each, \
 assign "k_top_score": a float between 0.0 and 1.0 (higher = stronger) and \
-explain thoroughly in "justificacion_agrupacion" why they were grouped.
+develop in "justificacion_agrupacion" an EXTENSIVE, analytical and deep \
+explanation of AT LEAST 3 to 4 well-developed paragraphs: why those ideas were \
+grouped, what patterns, tensions and nuances they reveal, their relevance to \
+the theme and how they connect to the rest of the interview.
+- Overlap: the same sentence or phrase (frase_origen) CAN and MUST belong to \
+multiple conceptos_ganadores when its meaning contributes to more than one \
+theme. Total or partial overlap of phrases across concepts is allowed; do not \
+force each phrase into a single concept.
 - Discarded Concepts: identify tangential or weak ideas that did not pass the \
 threshold. For each, assign "motivo_descarte" (a short category, e.g. \
-"redundante", "fuera_de_contexto") and a critical "analisis_descarte" \
-justifying why discarding it was correct.
+"redundante", "fuera_de_contexto") and a critical, EXTENSIVE and deep \
+"analisis_descarte" of AT LEAST 3 to 4 paragraphs justifying why discarding it \
+was correct.
 - Deduplication: merge near-identical concepts into a single one and remove \
 repeated supporting phrases; never return two winning concepts that mean the \
 same thing.""",
@@ -97,10 +113,14 @@ same thing.""",
 - 提取與歸納：識別所有基礎觀點，並將其歸納為連貫的上層概念。
 - 勝出概念（k-top）：選出最強的 {k_top} 個概念。為每個概念賦予 "k_top_score"：\
 一個 0.0 到 1.0 之間的浮點數（越大越強），並在 "justificacion_agrupacion" 中\
-詳細說明歸納理由。
+撰寫至少 3 至 4 個充分展開段落的詳盡、深入且具分析性的說明：為何如此歸納、揭示\
+了哪些模式、張力與細微差異、對主題的重要性，以及與整場訪談其餘部分的關聯。
+- 重疊（Overlap）：同一個句子或語句（frase_origen）只要其含義對多個主題有貢獻，\
+就可以且應該屬於多個 conceptos_ganadores。允許概念之間的語句完全或部分重疊；\
+不要強迫每個語句只屬於單一概念。
 - 被捨棄的概念：識別未達到閾值的邊緣或薄弱觀點。為每個賦予 "motivo_descarte"\
-（簡短類別，例如 "redundante"、"fuera_de_contexto"），並提供批判性的 \
-"analisis_descarte"，說明捨棄它為何是正確的。
+（簡短類別，例如 "redundante"、"fuera_de_contexto"），並提供至少 3 至 4 個段落\
+批判性、詳盡且深入的 "analisis_descarte"，說明捨棄它為何是正確的。
 - 去重：將幾乎相同的概念合併為一個，並移除重複的來源語句；切勿返回兩個語意相同的\
 勝出概念。""",
 }
