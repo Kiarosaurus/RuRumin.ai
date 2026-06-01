@@ -37,6 +37,22 @@ interface Props {
 const NODE_W = 184;
 const NODE_H = 46;
 
+// Phrase (leaf) nodes hold long sentences, so they are wider and wrap.
+const PHRASE_W = 300;
+const PHRASE_LINE_H = 16;
+const PHRASE_CHARS_PER_LINE = 42;
+const PHRASE_MAX_LINES = 8;
+const NEUTRAL_BORDER = "#94a3b8";
+
+/** Estimate a phrase node's height from its text so dagre reserves the space. */
+function phraseHeight(text: string): number {
+  const lines = Math.min(
+    PHRASE_MAX_LINES,
+    Math.max(1, Math.ceil(text.length / PHRASE_CHARS_PER_LINE)),
+  );
+  return lines * PHRASE_LINE_H + 16; // + vertical padding
+}
+
 /** Build pastel concept nodes + cross-layer edges, positioned by dagre (BT). */
 function buildDag(analysis: AnalysisResponse): { nodes: Node[]; edges: Edge[] } {
   const layers = flattenLayers(analysis.root_layer); // index 0 = most granular
@@ -92,17 +108,96 @@ function buildDag(analysis: AnalysisResponse): { nodes: Node[]; edges: Edge[] } 
     }
   }
 
-  // dagre layout: bottom-to-top so macro concepts end up on top.
+  // Phrase leaf nodes: the unique frases_origen of the LOWEST concept layer
+  // (index 0). Each phrase points UP to every layer-0 concept that contains it
+  // (a phrase may feed several concepts — the overlap rule), so they land at the
+  // absolute bottom rank under dagre's bottom-to-top layout.
+  const base = layers[0];
+  if (base) {
+    const byText = new Map<
+      string,
+      { text: string; conceptIds: string[]; firstColor: number }
+    >();
+    base.winning_concepts.forEach((c, ci) => {
+      for (const raw of c.supporting_quotes) {
+        const text = raw.trim();
+        if (!text) continue;
+        const key = text.toLowerCase();
+        let entry = byText.get(key);
+        if (!entry) {
+          entry = { text, conceptIds: [], firstColor: ci };
+          byText.set(key, entry);
+        }
+        if (!entry.conceptIds.includes(c.id)) entry.conceptIds.push(c.id);
+      }
+    });
+
+    let pi = 0;
+    for (const entry of byText.values()) {
+      const phraseId = `phrase-${pi++}`;
+      // Border = the concept's pastel when it feeds one concept; neutral when it
+      // feeds several (overlap).
+      const borderColor =
+        entry.conceptIds.length > 1
+          ? NEUTRAL_BORDER
+          : pastelFor(entry.firstColor).border;
+      const h = phraseHeight(entry.text);
+      nodes.push({
+        id: phraseId,
+        data: { label: entry.text },
+        position: { x: 0, y: 0 },
+        sourcePosition: Position.Top,
+        targetPosition: Position.Bottom,
+        style: {
+          width: PHRASE_W,
+          height: h,
+          padding: "6px 10px",
+          background: "#f8fafc",
+          border: `1.5px solid ${borderColor}`,
+          color: "#1f2937",
+          borderRadius: 8,
+          fontSize: 11,
+          fontWeight: 400,
+          textAlign: "left",
+          lineHeight: `${PHRASE_LINE_H}px`,
+          display: "-webkit-box",
+          WebkitLineClamp: PHRASE_MAX_LINES,
+          WebkitBoxOrient: "vertical",
+          overflow: "hidden",
+          whiteSpace: "normal",
+        },
+      });
+      for (const cid of entry.conceptIds) {
+        edges.push({
+          id: `${phraseId}->${cid}`,
+          source: phraseId,
+          target: cid,
+          type: "smoothstep",
+          markerEnd: { type: MarkerType.ArrowClosed, color: "#cbd5e1" },
+          style: { stroke: "#cbd5e1", strokeWidth: 1 },
+        });
+      }
+    }
+  }
+
+  // dagre layout: bottom-to-top so macro concepts end up on top and phrase leaf
+  // nodes sink to the absolute bottom. Sizes are read per-node (phrases differ).
+  const sizeOf = (n: Node) => ({
+    width: typeof n.style?.width === "number" ? n.style.width : NODE_W,
+    height: typeof n.style?.height === "number" ? n.style.height : NODE_H,
+  });
+
   const g = new dagre.graphlib.Graph();
   g.setGraph({ rankdir: "BT", nodesep: 28, ranksep: 70, marginx: 20, marginy: 20 });
   g.setDefaultEdgeLabel(() => ({}));
-  nodes.forEach((n) => g.setNode(n.id, { width: NODE_W, height: NODE_H }));
+  nodes.forEach((n) => g.setNode(n.id, sizeOf(n)));
   edges.forEach((e) => g.setEdge(e.source, e.target));
   dagre.layout(g);
   nodes.forEach((n) => {
     const pos = g.node(n.id);
+    const { width, height } = sizeOf(n);
     // dagre gives the node center; reactflow wants the top-left corner.
-    n.position = { x: pos.x - NODE_W / 2, y: pos.y - NODE_H / 2 };
+    n.position = { x: pos.x - width / 2, y: pos.y - height / 2 };
   });
 
   return { nodes, edges };
