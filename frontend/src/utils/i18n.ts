@@ -35,6 +35,8 @@ export type UIKey =
   | "tree.empty"
   | "tree.legendLayer"
   | "tree.legendConcept"
+  | "tree.hidePhrases"
+  | "tree.showPhrases"
   | "docx.unsupported"
   | "docx.empty"
   | "docx.readError"
@@ -89,6 +91,8 @@ const ES: Record<UIKey, string> = {
   "tree.empty": "No hay datos para mostrar.",
   "tree.legendLayer": "Layer",
   "tree.legendConcept": "Concepto",
+  "tree.hidePhrases": "Esconder frases",
+  "tree.showPhrases": "Mostrar frases",
   "docx.unsupported": 'Solo se admiten documentos Word .docx. Recibido: "{name}".',
   "docx.empty": 'El documento "{name}" no contiene texto extraíble.',
   "docx.readError": 'No se pudo leer el documento "{name}".',
@@ -146,6 +150,8 @@ const EN: Record<UIKey, string> = {
   "tree.empty": "No data to display.",
   "tree.legendLayer": "Layer",
   "tree.legendConcept": "Concept",
+  "tree.hidePhrases": "Hide phrases",
+  "tree.showPhrases": "Show phrases",
   "docx.unsupported": 'Only Word .docx documents are supported. Received: "{name}".',
   "docx.empty": 'The document "{name}" has no extractable text.',
   "docx.readError": 'Could not read the document "{name}".',
@@ -203,6 +209,8 @@ const ZH: Record<UIKey, string> = {
   "tree.empty": "暫無可顯示的資料。",
   "tree.legendLayer": "層級",
   "tree.legendConcept": "概念",
+  "tree.hidePhrases": "隱藏語句",
+  "tree.showPhrases": "顯示語句",
   "docx.unsupported": "僅支援 Word .docx 文件。收到的是：「{name}」。",
   "docx.empty": "文件「{name}」沒有可擷取的文字。",
   "docx.readError": "無法讀取文件「{name}」。",

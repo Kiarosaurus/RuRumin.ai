@@ -13,11 +13,12 @@
  * the same pastel color the readers use. Long justifications are NOT shown here.
  */
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import ReactFlow, {
   Background,
   Controls,
   MarkerType,
+  Panel,
   Position,
   type Edge,
   type Node,
@@ -39,22 +40,26 @@ const NODE_H = 46;
 
 // Phrase (leaf) nodes hold long sentences, so they are wider and wrap.
 const PHRASE_W = 300;
-const PHRASE_LINE_H = 16;
-const PHRASE_CHARS_PER_LINE = 42;
-const PHRASE_MAX_LINES = 8;
+const PHRASE_LINE_H = 18;
+// Conservative chars-per-line (under the true fit) so the estimate never falls
+// short and the whole sentence is guaranteed to fit inside the box.
+const PHRASE_CHARS_PER_LINE = 38;
 const NEUTRAL_BORDER = "#94a3b8";
 
-/** Estimate a phrase node's height from its text so dagre reserves the space. */
+/**
+ * Height a phrase node needs to fit its full text — grows with length, no cap.
+ * dagre reserves this so long sentences expand downward without overlapping.
+ */
 function phraseHeight(text: string): number {
-  const lines = Math.min(
-    PHRASE_MAX_LINES,
-    Math.max(1, Math.ceil(text.length / PHRASE_CHARS_PER_LINE)),
-  );
-  return lines * PHRASE_LINE_H + 16; // + vertical padding
+  const lines = Math.max(1, Math.ceil(text.length / PHRASE_CHARS_PER_LINE));
+  return lines * PHRASE_LINE_H + 18; // + vertical padding
 }
 
 /** Build pastel concept nodes + cross-layer edges, positioned by dagre (BT). */
-function buildDag(analysis: AnalysisResponse): { nodes: Node[]; edges: Edge[] } {
+function buildDag(
+  analysis: AnalysisResponse,
+  showPhrases: boolean,
+): { nodes: Node[]; edges: Edge[] } {
   const layers = flattenLayers(analysis.root_layer); // index 0 = most granular
   const nodes: Node[] = [];
   const edges: Edge[] = [];
@@ -113,7 +118,7 @@ function buildDag(analysis: AnalysisResponse): { nodes: Node[]; edges: Edge[] } 
   // (a phrase may feed several concepts — the overlap rule), so they land at the
   // absolute bottom rank under dagre's bottom-to-top layout.
   const base = layers[0];
-  if (base) {
+  if (showPhrases && base) {
     const byText = new Map<
       string,
       { text: string; conceptIds: string[]; firstColor: number }
@@ -160,11 +165,10 @@ function buildDag(analysis: AnalysisResponse): { nodes: Node[]; edges: Edge[] } 
           fontWeight: 400,
           textAlign: "left",
           lineHeight: `${PHRASE_LINE_H}px`,
-          display: "-webkit-box",
-          WebkitLineClamp: PHRASE_MAX_LINES,
-          WebkitBoxOrient: "vertical",
-          overflow: "hidden",
+          display: "block",
+          overflow: "visible",
           whiteSpace: "normal",
+          wordBreak: "break-word",
         },
       });
       for (const cid of entry.conceptIds) {
@@ -204,7 +208,11 @@ function buildDag(analysis: AnalysisResponse): { nodes: Node[]; edges: Edge[] } 
 }
 
 export function TreeView({ analysis, language }: Props) {
-  const { nodes, edges } = useMemo(() => buildDag(analysis), [analysis]);
+  const [showPhrases, setShowPhrases] = useState(true);
+  const { nodes, edges } = useMemo(
+    () => buildDag(analysis, showPhrases),
+    [analysis, showPhrases],
+  );
 
   if (nodes.length === 0) {
     return (
@@ -217,6 +225,11 @@ export function TreeView({ analysis, language }: Props) {
   return (
     <div className="tree-view">
       <ReactFlow nodes={nodes} edges={edges} fitView minZoom={0.2} maxZoom={2}>
+        <Panel position="top-left">
+          <button className="tree-toggle" onClick={() => setShowPhrases((v) => !v)}>
+            {tr(language, showPhrases ? "tree.hidePhrases" : "tree.showPhrases")}
+          </button>
+        </Panel>
         <Background />
         <Controls />
       </ReactFlow>

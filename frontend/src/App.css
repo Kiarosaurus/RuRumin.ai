@@ -322,6 +322,22 @@ button {
 }
 
 /* ---------- Tree (Mode 3) ---------- */
+.tree-toggle {
+  border: 1px solid var(--border);
+  background: #fff;
+  color: #1f2937;
+  border-radius: 6px;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+}
+
+.tree-toggle:hover {
+  background: #f1f5f9;
+}
+
 .tree-view {
   height: 100%;
   width: 100%;
