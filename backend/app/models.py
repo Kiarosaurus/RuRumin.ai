@@ -165,7 +165,7 @@ class AnalysisOptions(BaseModel):
         description="Number of winning concepts to keep per layer.",
     )
     model: str = Field(
-        default="gemini-2.5-pro",
+        default="gemini-2.5-flash",
         description="Identifier of the Gemini model to invoke.",
     )
 

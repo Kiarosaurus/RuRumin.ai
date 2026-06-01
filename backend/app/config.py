@@ -19,10 +19,14 @@ load_dotenv()
 # Default origins allowed when ALLOWED_ORIGINS is unset:
 #   * the Vite dev server, and
 #   * the schemes a packaged Tauri webview uses in production.
+# Windows (WebView2) serves the app from http://tauri.localhost; macOS/Linux
+# (WebKit) use tauri://localhost. https://tauri.localhost covers the custom
+# protocol on some configs. All three are needed for a cross-platform build.
 DEFAULT_ALLOWED_ORIGINS = [
     "http://localhost:1420",
     "tauri://localhost",
     "https://tauri.localhost",
+    "http://tauri.localhost",
 ]
 
 

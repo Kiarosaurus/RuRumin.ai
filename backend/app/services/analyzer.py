@@ -47,13 +47,14 @@ MAX_ATTEMPTS = 3  # per model: 1 initial try + 2 retries
 RETRY_BACKOFF_SECONDS = 1.5  # multiplied by the attempt number
 RETRYABLE_STATUS = {429, 503}  # rate-limited / service unavailable
 
-# Model fallback cascade, highest capability first. When a model exhausts its
-# quota (429) or keeps failing, the next one is tried before giving up. Exact
-# google-genai model strings.
+# Model fallback cascade, in free-tier priority order. When a model exhausts its
+# quota (429) or keeps failing, the next one is tried before giving up. All four
+# are covered by the Gemini free tier. Exact google-genai model strings.
 MODEL_CASCADE: tuple[str, ...] = (
-    "gemini-2.5-pro",  # priority 1: strongest reasoning
-    "gemini-2.5-flash",  # priority 2: fast, large context
-    "gemini-2.5-flash-lite",  # priority 3: ultralight emergency fallback
+    "gemini-2.5-flash",  # priority 1: fast, large context
+    "gemini-3.5-flash",  # priority 2
+    "gemini-3.1-flash-lite",  # priority 3
+    "gemini-2.5-flash-lite",  # priority 4: ultralight emergency fallback
 )
 
 # The SDK client is created once per process, lazily, so importing this module
