@@ -145,3 +145,35 @@ async def test_fallback_to_second_model_on_429(monkeypatch):
     used_models = [c.kwargs["model"] for c in gen.call_args_list]
     assert used_models[-1] == secondary
     assert used_models.count(primary) == analyzer.MAX_ATTEMPTS
+
+
+# --------------------------------------------------------------------------- #
+# 7. Forced N runs per layer (best-of-N) — quota maximization
+# --------------------------------------------------------------------------- #
+async def test_forced_runs_per_layer(monkeypatch):
+    monkeypatch.setattr(analyzer, "RUNS_PER_LAYER", 5)
+    gen = install_fake_client(monkeypatch, return_value=gemini_response(VALID_JSON))
+
+    resp = await analyzer.run_thematic_analysis(_request())  # max_layers=1
+
+    # One layer x 5 forced runs = 5 model calls, all reported in metadata.
+    assert gen.call_count == 5
+    assert resp.metadata.total_runs == 5
+
+
+async def test_malformed_run_tolerated_if_another_run_is_valid(monkeypatch):
+    monkeypatch.setattr(analyzer, "RUNS_PER_LAYER", 3)
+    # First run malformed, the next two valid -> layer still succeeds.
+    gen = install_fake_client(
+        monkeypatch,
+        side_effect=[
+            gemini_response("no soy json {"),
+            gemini_response(VALID_JSON),
+            gemini_response(VALID_JSON),
+        ],
+    )
+
+    resp = await analyzer.run_thematic_analysis(_request())
+
+    assert gen.call_count == 3
+    assert resp.root_layer.winning_concepts[0].label == "Costo"

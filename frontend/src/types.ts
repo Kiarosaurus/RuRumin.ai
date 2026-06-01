@@ -137,6 +137,10 @@ export interface ProgressEvent {
   reason?: string;
   /** Retry attempt number for this model (calling_model). */
   attempt?: number;
+  /** 1-based forced-run index within the layer. */
+  run?: number;
+  /** Total forced runs per layer. */
+  runs?: number;
   /** 0-based layer index this event refers to. */
   layer?: number;
   /** Maximum recursion depth for this run. */

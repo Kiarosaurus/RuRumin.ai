@@ -15,15 +15,21 @@ requests on the same Cloud Run instance share the per-model budget.
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from collections import defaultdict, deque
 from typing import Awaitable, Callable
 
+logger = logging.getLogger("rurumin.rate_limiter")
+
 # Free-tier requests-per-minute per model. Keep in sync with MODEL_CASCADE.
+# NOTE: this limiter only enforces RPM. The free tier ALSO caps requests-per-day
+# (RPD) — which this cannot prevent. The cascade order (highest-RPD model first)
+# is what addresses RPD; an RPD 429 surfaces in logs with Google's exact message.
 RPM_LIMITS: dict[str, int] = {
-    "gemini-2.5-flash": 5,
-    "gemini-3.5-flash": 5,
     "gemini-3.1-flash-lite": 15,
+    "gemini-3.5-flash-lite": 15,
+    "gemini-2.5-flash": 5,
     "gemini-2.5-flash-lite": 10,
 }
 
@@ -68,6 +74,8 @@ class RateLimiter:
         emit: Emit = _noop,
         *,
         layer: int | None = None,
+        run: int | None = None,
+        runs: int | None = None,
     ) -> None:
         """
         Reserve a slot for `model`, sleeping if the RPM window is full.
@@ -85,6 +93,16 @@ class RateLimiter:
             if len(window) >= limit:
                 wait = WINDOW_SECONDS - (now - window[0]) + WAIT_BUFFER_SECONDS
                 if wait > 0:
+                    logger.info(
+                        "Layer %s - Run %s/%s - RPM %d alcanzado en '%s'. "
+                        "Durmiendo %.1fs antes de la petición.",
+                        layer,
+                        run,
+                        runs,
+                        limit,
+                        model,
+                        wait,
+                    )
                     await emit(
                         {
                             "type": "progress",
@@ -93,6 +111,8 @@ class RateLimiter:
                             "sleep_seconds": round(wait, 1),
                             "rpm": limit,
                             "layer": layer,
+                            "run": run,
+                            "runs": runs,
                         }
                     )
                     await asyncio.sleep(wait)

@@ -26,6 +26,10 @@ export interface AnalysisProgressState {
   maxLayers: number;
   layersDone: number;
   requestCount: number;
+  /** 1-based forced-run index within the current layer. */
+  run: number;
+  /** Total forced runs per layer. */
+  runs: number;
   /** Seconds the backend reported it will sleep (rate_limit_wait). */
   sleepSeconds?: number;
   /** The waiting model's requests-per-minute ceiling (rate_limit_wait). */
@@ -42,6 +46,8 @@ const IDLE: AnalysisProgressState = {
   maxLayers: 0,
   layersDone: 0,
   requestCount: 0,
+  run: 1,
+  runs: 1,
   sleepNonce: 0,
 };
 
@@ -52,6 +58,8 @@ function reduce(
   const next = { ...state, active: true, phase: ev.phase };
   if (ev.max_layers != null) next.maxLayers = ev.max_layers;
   if (ev.layer != null) next.layer = ev.layer;
+  if (ev.run != null) next.run = ev.run;
+  if (ev.runs != null) next.runs = ev.runs;
 
   switch (ev.phase) {
     case "starting":
@@ -112,6 +120,8 @@ function phaseMessage(
       return tr(language, "progress.calling_model", {
         model: state.model ?? "Gemini",
         attempt: state.attempt,
+        run: state.run,
+        runs: state.runs,
       });
     case "rate_limit_wait":
       return tr(language, "progress.rate_limit_wait", {

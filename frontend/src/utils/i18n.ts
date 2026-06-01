@@ -98,7 +98,8 @@ const ES: Record<UIKey, string> = {
   "toast.unexpected": "Fallo inesperado",
   "progress.starting": "Preparando análisis…",
   "progress.layer_start": "Analizando layer {layer} de {max}…",
-  "progress.calling_model": "Consultando a {model} (intento {attempt})…",
+  "progress.calling_model":
+    "Consultando a {model} · Run {run}/{runs} (intento {attempt})…",
   "progress.rate_limit_wait":
     "Límite de {rpm} req/min en {model}. Durmiendo {seconds} s…",
   "progress.model_fallback": "{model} agotado. Cambiando a {next}…",
@@ -151,7 +152,8 @@ const EN: Record<UIKey, string> = {
   "toast.unexpected": "Unexpected failure",
   "progress.starting": "Preparing analysis…",
   "progress.layer_start": "Analyzing layer {layer} of {max}…",
-  "progress.calling_model": "Calling {model} (attempt {attempt})…",
+  "progress.calling_model":
+    "Calling {model} · Run {run}/{runs} (attempt {attempt})…",
   "progress.rate_limit_wait":
     "{rpm} req/min limit on {model}. Sleeping {seconds} s…",
   "progress.model_fallback": "{model} exhausted. Switching to {next}…",
@@ -204,7 +206,8 @@ const ZH: Record<UIKey, string> = {
   "toast.unexpected": "意外错误",
   "progress.starting": "正在准备分析…",
   "progress.layer_start": "正在分析第 {layer} / {max} 层…",
-  "progress.calling_model": "正在调用 {model}（第 {attempt} 次尝试）…",
+  "progress.calling_model":
+    "正在调用 {model} · 第 {run}/{runs} 次运行（第 {attempt} 次尝试）…",
   "progress.rate_limit_wait": "{model} 达到每分钟 {rpm} 次上限。休眠 {seconds} 秒…",
   "progress.model_fallback": "{model} 已用尽。切换到 {next}…",
   "progress.validating": "正在校验第 {layer} 层的响应…",

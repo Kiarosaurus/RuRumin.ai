@@ -27,7 +27,7 @@ from google.genai import errors as genai_errors
 from google.genai import types as genai_types
 from pydantic import ValidationError
 
-from app.config import get_gemini_api_key
+from app.config import get_gemini_api_key, get_runs_per_layer
 from app.llm_schema import LayerLLMOutput
 from app.models import (
     AnalysisLayer,
@@ -48,13 +48,19 @@ MAX_ATTEMPTS = 3  # per model: 1 initial try + 2 retries
 RETRY_BACKOFF_SECONDS = 1.5  # multiplied by the attempt number
 RETRYABLE_STATUS = {429, 503}  # rate-limited / service unavailable
 
-# Model fallback cascade, in free-tier priority order. When a model exhausts its
-# quota (429) or keeps failing, the next one is tried before giving up. All four
-# are covered by the Gemini free tier. Exact google-genai model strings.
+# Forced runs per layer. The real bottleneck is the per-DAY quota (RPD), not RPM:
+# repeating each layer N times deliberately spends RPD and lets us keep the
+# richest result (best-of-N). Override with the RUNS_PER_LAYER env var.
+RUNS_PER_LAYER = get_runs_per_layer()
+
+# Model fallback cascade, ordered by DAILY quota (RPD) so testing burns the most
+# generous bucket first. gemini-3.1-flash-lite grants 500 RPD on the free tier,
+# by far the highest; the 2.5 family (tiny RPD) is kept as last-resort backup.
+# Exact google-genai model strings.
 MODEL_CASCADE: tuple[str, ...] = (
-    "gemini-2.5-flash",  # priority 1: fast, large context
-    "gemini-3.5-flash",  # priority 2
-    "gemini-3.1-flash-lite",  # priority 3
+    "gemini-3.1-flash-lite",  # priority 1: 500 RPD — highest daily quota
+    "gemini-3.5-flash-lite",  # priority 2
+    "gemini-2.5-flash",  # priority 3: 2.5 family, low RPD — backup
     "gemini-2.5-flash-lite",  # priority 4: ultralight emergency fallback
 )
 
@@ -106,7 +112,7 @@ async def run_thematic_analysis(
         root_layer=root_layer,
         metadata=AnalysisMetadata(
             total_layers=total_layers,
-            total_runs=total_layers,  # one Gemini run per layer
+            total_runs=total_layers * RUNS_PER_LAYER,  # forced runs per layer
             model=request.options.model,
             language=request.language,
             source_filename=request.source_filename,
@@ -125,6 +131,7 @@ async def _analyze_layer(
     """
     k = request.options.k_top
     max_layers = request.options.max_layers
+    runs = RUNS_PER_LAYER
 
     await emit(
         {
@@ -132,6 +139,7 @@ async def _analyze_layer(
             "phase": "layer_start",
             "layer": level,
             "max_layers": max_layers,
+            "runs": runs,
         }
     )
 
@@ -143,30 +151,59 @@ async def _analyze_layer(
         language=request.language,
     )
 
-    # 2. call the model cascade -> raw JSON string in the prompt's schema
-    raw_output = await _call_gemini(
-        prompt=prompt,
-        language=request.language,
-        emit=emit,
-        level=level,
-    )
+    # 2. forced repetition: run the cascade `runs` times. Each run yields a raw
+    #    JSON string; we keep every well-formed candidate and discard malformed
+    #    ones (a single bad run must not sink the whole layer). A 502 from
+    #    `_call_gemini` means the cascade is fully exhausted (no quota left) and
+    #    propagates — there is no point continuing the remaining runs.
+    candidates: list[AnalysisLayer] = []
+    for run in range(1, runs + 1):
+        logger.info("Layer %d - Run %d/%d: solicitando análisis.", level, run, runs)
+        raw_output = await _call_gemini(
+            prompt=prompt,
+            language=request.language,
+            emit=emit,
+            level=level,
+            run=run,
+            runs=runs,
+        )
 
-    # 3. validate the raw JSON against the LLM schema. A model that ignores the
-    #    schema (despite JSON mode) is an upstream failure -> 502 Bad Gateway.
-    await emit({"type": "progress", "phase": "validating", "layer": level})
-    try:
-        llm_output = LayerLLMOutput.parse_model_text(raw_output)
-    except (ValidationError, ValueError) as exc:
+        # 3. validate the raw JSON against the LLM schema.
+        await emit(
+            {"type": "progress", "phase": "validating", "layer": level, "run": run, "runs": runs}
+        )
+        try:
+            llm_output = LayerLLMOutput.parse_model_text(raw_output)
+        except (ValidationError, ValueError) as exc:
+            logger.warning(
+                "Layer %d - Run %d/%d: respuesta no cumple el esquema (%s). Run descartado.",
+                level,
+                run,
+                runs,
+                exc,
+            )
+            continue
+        candidates.append(llm_output_to_layer(llm_output, layer_id=f"layer-{level}", k=k))
+
+    # A model that ignored the schema on EVERY run is an upstream failure -> 502.
+    if not candidates:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=(
-                "El modelo devolvió una respuesta que no cumple el esquema "
-                "esperado. Intenta nuevamente."
+                "El modelo devolvió respuestas que no cumplen el esquema esperado "
+                "en ninguna de las repeticiones. Intenta nuevamente."
             ),
-        ) from exc
+        )
 
-    # 4. map onto the transport contract
-    layer = llm_output_to_layer(llm_output, layer_id=f"layer-{level}", k=k)
+    # 4. best-of-N: keep the run with the most winning concepts (richest signal).
+    layer = max(candidates, key=lambda lyr: len(lyr.winning_concepts))
+    logger.info(
+        "Layer %d: %d/%d runs válidos; elegido el de %d conceptos ganadores.",
+        level,
+        len(candidates),
+        runs,
+        len(layer.winning_concepts),
+    )
     await emit({"type": "progress", "phase": "layer_done", "layer": level})
 
     # 5. recurse on the winners until max_layers is reached
@@ -215,6 +252,8 @@ async def _attempt_model(
     model: str,
     emit: Emit = _noop,
     level: int | None = None,
+    run: int | None = None,
+    runs: int | None = None,
 ) -> str:
     """
     Try a single model with timeout + bounded retries.
@@ -232,7 +271,16 @@ async def _attempt_model(
         try:
             # Pace against the model's RPM before spending an attempt. Emits a
             # `rate_limit_wait` event (with countdown) if it has to sleep.
-            await LIMITER.acquire(model, emit, layer=level)
+            await LIMITER.acquire(model, emit, layer=level, run=run, runs=runs)
+            logger.info(
+                "Layer %s - Run %s/%s - Modelo '%s' intento %d/%d: enviando petición.",
+                level,
+                run,
+                runs,
+                model,
+                attempt,
+                MAX_ATTEMPTS,
+            )
             await emit(
                 {
                     "type": "progress",
@@ -240,6 +288,8 @@ async def _attempt_model(
                     "model": model,
                     "attempt": attempt,
                     "layer": level,
+                    "run": run,
+                    "runs": runs,
                 }
             )
             response = await asyncio.wait_for(
@@ -253,8 +303,33 @@ async def _attempt_model(
             return response.text or ""
         except asyncio.TimeoutError as exc:
             last_error = exc  # timeouts are always retryable
+            logger.warning(
+                "Layer %s - Run %s/%s - Modelo '%s' intento %d/%d: TIMEOUT tras %.0fs.",
+                level,
+                run,
+                runs,
+                model,
+                attempt,
+                MAX_ATTEMPTS,
+                GEMINI_TIMEOUT_SECONDS,
+            )
         except genai_errors.APIError as exc:
             last_error = exc
+            # Log the VERBATIM Google message so GCP Logs Explorer can tell apart
+            # "Resource exhausted per minute" (RPM) vs "per day" (RPD).
+            api_message = getattr(exc, "message", None) or str(exc)
+            logger.warning(
+                "Layer %s - Run %s/%s - Modelo '%s' intento %d/%d falló HTTP %s. "
+                "Mensaje exacto de Google: %s",
+                level,
+                run,
+                runs,
+                model,
+                attempt,
+                MAX_ATTEMPTS,
+                getattr(exc, "code", None),
+                api_message,
+            )
             if not _is_retryable(exc):
                 # Non-retryable (e.g. 400): stop this model, let caller fall back.
                 raise _ModelExhausted(exc) from exc
@@ -270,6 +345,8 @@ async def _call_gemini(
     language: str = "es",
     emit: Emit = _noop,
     level: int | None = None,
+    run: int | None = None,
+    runs: int | None = None,
 ) -> str:
     """
     Call the model cascade and return the first successful raw JSON response.
@@ -294,18 +371,26 @@ async def _call_gemini(
     last_error: Exception | None = None
     for index, model in enumerate(MODEL_CASCADE):
         try:
-            return await _attempt_model(client, prompt, config, model, emit, level)
+            return await _attempt_model(
+                client, prompt, config, model, emit, level, run, runs
+            )
         except _ModelExhausted as exc:
             last_error = exc.cause
             has_fallback = index < len(MODEL_CASCADE) - 1
             if has_fallback:
                 next_model = MODEL_CASCADE[index + 1]
                 code = getattr(exc.cause, "code", type(exc.cause).__name__)
+                api_message = getattr(exc.cause, "message", None) or str(exc.cause)
                 logger.warning(
-                    "Modelo '%s' agotado/falló (%s). Fallback a '%s'.",
+                    "Layer %s - Run %s/%s - Modelo '%s' agotado (HTTP %s). "
+                    "Fallback a '%s'. Mensaje de Google: %s",
+                    level,
+                    run,
+                    runs,
                     model,
                     code,
                     next_model,
+                    api_message,
                 )
                 await emit(
                     {
@@ -315,6 +400,8 @@ async def _call_gemini(
                         "next_model": next_model,
                         "reason": str(code),
                         "layer": level,
+                        "run": run,
+                        "runs": runs,
                     }
                 )
 

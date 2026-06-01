@@ -49,6 +49,22 @@ def get_gemini_api_key() -> str:
     return key
 
 
+def get_runs_per_layer() -> int:
+    """
+    Return how many model runs to force per analysis layer.
+
+    Reads RUNS_PER_LAYER (default 5). Forced repetition lets us spend the daily
+    quota (RPD) deliberately and pick the richest result (best-of-N) per layer.
+    Always at least 1; malformed/invalid values fall back to the default.
+    """
+    raw = os.getenv("RUNS_PER_LAYER", "").strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        return 5
+    return max(1, value)
+
+
 def get_allowed_origins() -> list[str]:
     """
     Return the CORS allow-list.
