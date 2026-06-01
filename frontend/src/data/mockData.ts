@@ -8,19 +8,34 @@
 import type { AnalysisResponse, Language } from "../types";
 import { AnalysisStatus } from "../types";
 
+/**
+ * One analysis run over a document. A document can hold several of these —
+ * e.g. the same transcript analyzed at 3 layers and then again at 5.
+ */
+export interface AnalysisRecord {
+  /** Stable id for this run (we reuse the backend request_id). */
+  id: string;
+  /** ISO-8601 timestamp of when the run completed. */
+  timestamp: string;
+  /** Layer depth configured for this run (min 2). */
+  max_layers: number;
+  /** The analysis tree returned by the backend for this run. */
+  result: AnalysisResponse;
+}
+
 /** A document shown in the Home repository view. */
 export interface DocumentRecord {
   id: string;
   filename: string;
   status: "processed" | "processing" | "failed";
-  /** ISO-8601 timestamp. */
+  /** ISO-8601 timestamp of document creation (first analysis). */
   created_at: string;
   /** Language the document was analyzed in. */
   language: Language;
   /** Clean text extracted from the .docx. */
   transcript_text: string;
-  /** Analysis result, present once processed. */
-  analysis: AnalysisResponse | null;
+  /** All analysis runs over this document, newest first. Empty until processed. */
+  analyses: AnalysisRecord[];
 }
 
 const SAMPLE_TRANSCRIPT = [
@@ -128,7 +143,14 @@ export const MOCK_DOCUMENTS: DocumentRecord[] = [
     created_at: "2026-05-31T10:00:00Z",
     language: "es",
     transcript_text: SAMPLE_TRANSCRIPT,
-    analysis: MOCK_ANALYSIS,
+    analyses: [
+      {
+        id: "mock-0001",
+        timestamp: "2026-05-31T10:00:00Z",
+        max_layers: 2,
+        result: MOCK_ANALYSIS,
+      },
+    ],
   },
   {
     id: "doc-2",
@@ -137,7 +159,7 @@ export const MOCK_DOCUMENTS: DocumentRecord[] = [
     created_at: "2026-05-31T11:30:00Z",
     language: "es",
     transcript_text: "",
-    analysis: null,
+    analyses: [],
   },
   {
     id: "doc-3",
@@ -146,6 +168,6 @@ export const MOCK_DOCUMENTS: DocumentRecord[] = [
     created_at: "2026-05-30T16:45:00Z",
     language: "en",
     transcript_text: "",
-    analysis: null,
+    analyses: [],
   },
 ];

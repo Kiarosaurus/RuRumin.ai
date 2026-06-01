@@ -8,7 +8,7 @@
  */
 
 import { useRef, useState } from "react";
-import type { DocumentRecord } from "../data/mockData";
+import type { AnalysisRecord, DocumentRecord } from "../data/mockData";
 import { analyzeTranscriptStream, ApiError } from "../services/apiClient";
 import {
   DocxExtractionError,
@@ -31,9 +31,13 @@ interface Props {
   onOpen: (doc: DocumentRecord) => void;
   onAnalyzed: (doc: DocumentRecord) => void;
   onDelete: (id: string) => void;
-  onReanalyze: (doc: DocumentRecord) => void;
+  onReanalyze: (doc: DocumentRecord, maxLayers: number) => void;
   notify: (toast: ToastState) => void;
 }
+
+/** Smallest tree the backend accepts. Mirrors AnalysisOptions.max_layers ge=2. */
+const MIN_LAYERS = 2;
+const DEFAULT_LAYERS = 5;
 
 const STATUS_KEY: Record<DocumentRecord["status"], UIKey> = {
   processed: "status.processed",
@@ -54,8 +58,17 @@ export function Home({
 }: Props) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [isAnalyzing, setAnalyzing] = useState(false);
+  /** Layer depth the user wants for the next run (import or new analysis). */
+  const [layers, setLayers] = useState(DEFAULT_LAYERS);
   const { state: progress, onProgress, reset: resetProgress } =
     useAnalysisProgress();
+
+  /** Clamp a layers value to the backend-valid range (>= 2, integer). */
+  const clampLayers = (raw: number) =>
+    Number.isFinite(raw) ? Math.max(MIN_LAYERS, Math.floor(raw)) : DEFAULT_LAYERS;
+  const commitLayers = (raw: number) => setLayers(clampLayers(raw));
+  /** The value actually sent to the backend (input may hold a transient NaN). */
+  const safeLayers = clampLayers(layers);
 
   async function handleFile(file: File | undefined) {
     if (fileInput.current) fileInput.current.value = "";
@@ -72,11 +85,18 @@ export function Home({
         extracted.text,
         language,
         onProgress,
-        undefined,
+        { max_layers: safeLayers },
         extracted.filename,
       );
 
-      // 3. Build the repository record from the response.
+      // 3. Build the repository record from the response. The document starts
+      //    with this single analysis run; more can be appended later.
+      const record: AnalysisRecord = {
+        id: analysis.request_id,
+        timestamp: analysis.metadata.created_at,
+        max_layers: safeLayers,
+        result: analysis,
+      };
       const doc: DocumentRecord = {
         id: analysis.request_id,
         filename: extracted.filename,
@@ -84,7 +104,7 @@ export function Home({
         created_at: analysis.metadata.created_at,
         language,
         transcript_text: extracted.text,
-        analysis,
+        analyses: [record],
       };
 
       notify({
@@ -136,6 +156,18 @@ export function Home({
               ))}
             </select>
           </label>
+          <label className="layers-select">
+            {tr(language, "home.layers")}
+            <input
+              type="number"
+              min={MIN_LAYERS}
+              step={1}
+              value={layers}
+              disabled={isAnalyzing}
+              onChange={(e) => setLayers(e.target.valueAsNumber)}
+              onBlur={(e) => commitLayers(e.target.valueAsNumber)}
+            />
+          </label>
           <input
             ref={fileInput}
             type="file"
@@ -173,7 +205,7 @@ export function Home({
             </span>
             <div className="doc-actions">
               <button
-                disabled={doc.status !== "processed" || !doc.analysis}
+                disabled={doc.status !== "processed" || doc.analyses.length === 0}
                 onClick={() => onOpen(doc)}
               >
                 {tr(language, "action.open")}
@@ -181,7 +213,8 @@ export function Home({
               <button
                 className="ghost"
                 disabled={!doc.transcript_text.trim() || busyIds.includes(doc.id)}
-                onClick={() => onReanalyze(doc)}
+                onClick={() => onReanalyze(doc, safeLayers)}
+                title={tr(language, "action.newAnalysisHint", { layers: safeLayers })}
               >
                 {busyIds.includes(doc.id) ? <Spinner label={tr(language, "a11y.loading")} /> : tr(language, "action.reanalyze")}
               </button>

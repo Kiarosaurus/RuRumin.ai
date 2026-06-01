@@ -17,16 +17,20 @@ export type UIKey =
   | "home.language"
   | "home.import"
   | "home.analyzing"
+  | "home.layers"
   | "status.processed"
   | "status.processing"
   | "status.failed"
   | "status.reanalyzing"
   | "action.open"
   | "action.reanalyze"
+  | "action.newAnalysisHint"
   | "action.delete"
   | "reader.summaryTitle"
   | "reader.detailsTitle"
   | "reader.layers"
+  | "reader.analysis"
+  | "reader.analysisOption"
   | "reader.winners"
   | "reader.discards"
   | "reader.noDiscards"
@@ -73,16 +77,20 @@ const ES: Record<UIKey, string> = {
   "home.language": "Idioma de análisis",
   "home.import": "+ Importar .docx",
   "home.analyzing": "Analizando…",
+  "home.layers": "Layers",
   "status.processed": "Procesado",
   "status.processing": "Procesando…",
   "status.failed": "Error",
   "status.reanalyzing": "Re-analizando…",
   "action.open": "Abrir",
-  "action.reanalyze": "Re-analizar",
+  "action.reanalyze": "Nuevo análisis",
+  "action.newAnalysisHint": "Crear un nuevo análisis con {layers} layers",
   "action.delete": "Eliminar",
   "reader.summaryTitle": "Resumen — frases ganadoras",
   "reader.detailsTitle": "Detalles — frases descartadas",
   "reader.layers": "Layers",
+  "reader.analysis": "Análisis",
+  "reader.analysisOption": "Análisis {n} ({layers} Layers)",
   "reader.winners": "Conceptos ganadores",
   "reader.discards": "Análisis de descartes",
   "reader.noDiscards": "Sin descartes en este layer.",
@@ -132,16 +140,20 @@ const EN: Record<UIKey, string> = {
   "home.language": "Analysis language",
   "home.import": "+ Import .docx",
   "home.analyzing": "Analyzing…",
+  "home.layers": "Layers",
   "status.processed": "Processed",
   "status.processing": "Processing…",
   "status.failed": "Error",
   "status.reanalyzing": "Re-analyzing…",
   "action.open": "Open",
-  "action.reanalyze": "Re-analyze",
+  "action.reanalyze": "New analysis",
+  "action.newAnalysisHint": "Run a new analysis with {layers} layers",
   "action.delete": "Delete",
   "reader.summaryTitle": "Summary — winning phrases",
   "reader.detailsTitle": "Details — discarded phrases",
   "reader.layers": "Layers",
+  "reader.analysis": "Analysis",
+  "reader.analysisOption": "Analysis {n} ({layers} Layers)",
   "reader.winners": "Winning concepts",
   "reader.discards": "Discard analysis",
   "reader.noDiscards": "No discards in this layer.",
@@ -191,16 +203,20 @@ const ZH: Record<UIKey, string> = {
   "home.language": "分析語言",
   "home.import": "+ 匯入 .docx",
   "home.analyzing": "分析中…",
+  "home.layers": "層數",
   "status.processed": "已處理",
   "status.processing": "處理中…",
   "status.failed": "錯誤",
   "status.reanalyzing": "重新分析中…",
   "action.open": "開啟",
-  "action.reanalyze": "重新分析",
+  "action.reanalyze": "新增分析",
+  "action.newAnalysisHint": "以 {layers} 層執行新的分析",
   "action.delete": "刪除",
   "reader.summaryTitle": "摘要 — 勝出語句",
   "reader.detailsTitle": "詳情 — 被捨棄語句",
   "reader.layers": "層級",
+  "reader.analysis": "分析",
+  "reader.analysisOption": "分析 {n}（{layers} 層）",
   "reader.winners": "勝出概念",
   "reader.discards": "捨棄分析",
   "reader.noDiscards": "該層沒有被捨棄的概念。",

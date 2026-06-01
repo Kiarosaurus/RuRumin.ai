@@ -61,6 +61,23 @@ body {
   color: #94a3b8;
 }
 
+/* Analysis switcher: pick which run of the active document is on screen. */
+.top-nav .analysis-switcher {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.top-nav .analysis-switcher select {
+  padding: 0.25rem 0.4rem;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  background: #1e293b;
+  color: #fff;
+}
+
 .content {
   flex: 1;
   overflow: auto;
@@ -93,6 +110,23 @@ body {
 }
 
 .lang-select select {
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+}
+
+/* Numeric layers picker (min 2) used for the next analysis run. */
+.layers-select {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.layers-select input {
+  width: 4rem;
   padding: 0.3rem 0.5rem;
   border: 1px solid var(--border);
   border-radius: 6px;
