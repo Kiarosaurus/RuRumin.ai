@@ -38,6 +38,8 @@ from app.models import (
 )
 from app.prompts import build_layer_prompt
 from app.rate_limiter import LIMITER, Emit, _noop
+from app.services.aggregation import aggregate_layer
+from app.services.embeddings import embed_texts
 from app.services.mapping import llm_output_to_layer
 
 logger = logging.getLogger("rurumin.analyzer")
@@ -129,8 +131,11 @@ async def _analyze_layer(
     """
     Run one layer (prompt -> model -> validate -> map) and recurse on winners.
     """
-    k = request.options.k_top
     max_layers = request.options.max_layers
+    # The deepest layer converges to ONE general concept (k=1); the rest keep
+    # the configured k-top width.
+    is_final_layer = level >= max_layers - 1
+    k = 1 if is_final_layer else request.options.k_top
     runs = RUNS_PER_LAYER
 
     await emit(
@@ -149,6 +154,7 @@ async def _analyze_layer(
         interview_text_chunk=text_chunk,
         k_top=k,
         language=request.language,
+        max_layers=max_layers,
     )
 
     # 2. forced repetition: run the cascade `runs` times. Each run yields a raw
@@ -195,10 +201,14 @@ async def _analyze_layer(
             ),
         )
 
-    # 4. best-of-N: keep the run with the most winning concepts (richest signal).
-    layer = max(candidates, key=lambda lyr: len(lyr.winning_concepts))
+    # 4. aggregate ALL valid runs: merge near-duplicate concepts, dedup quotes,
+    #    rank by merge-frequency x score, keep top k. Uses the repetition instead
+    #    of discarding it; no extra Gemini calls.
+    layer = await aggregate_layer(
+        candidates, k=k, layer_id=f"layer-{level}", embedder=embed_texts
+    )
     logger.info(
-        "Layer %d: %d/%d runs válidos; elegido el de %d conceptos ganadores.",
+        "Layer %d: %d/%d runs válidos agregados -> %d conceptos ganadores (dedup).",
         level,
         len(candidates),
         runs,
@@ -232,7 +242,7 @@ _SYSTEM_INSTRUCTION: dict[str, str] = {
         "Spanish; values are written in English."
     ),
     "zh": (
-        "你是定性分析师。只返回有效的 JSON。JSON 的键保持西班牙语；值用中文书写。"
+        "你是定性分析師。只返回有效的 JSON。JSON 的鍵保持西班牙語；值用繁體中文書寫。"
     ),
 }
 

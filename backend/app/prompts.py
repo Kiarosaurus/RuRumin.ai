@@ -62,7 +62,10 @@ y explica detalladamente en "justificacion_agrupacion" por qué se agruparon.
 - Conceptos Descartados: identifica las ideas tangenciales o débiles que no \
 superaron el umbral. Para cada una asigna "motivo_descarte" (categoría corta, \
 ej. "redundante", "fuera_de_contexto") y un "analisis_descarte" crítico que \
-justifique por qué fue correcto descartarla.""",
+justifique por qué fue correcto descartarla.
+- Deduplicación: fusiona en uno solo los conceptos casi idénticos y elimina las \
+frases de origen repetidas; nunca devuelvas dos conceptos ganadores que \
+signifiquen lo mismo.""",
     "en": """\
 Role: You are an Expert Qualitative Researcher and Advanced Data Analyst. \
 Perform a rigorous, exhaustive thematic analysis of interview transcripts.
@@ -80,21 +83,26 @@ explain thoroughly in "justificacion_agrupacion" why they were grouped.
 - Discarded Concepts: identify tangential or weak ideas that did not pass the \
 threshold. For each, assign "motivo_descarte" (a short category, e.g. \
 "redundante", "fuera_de_contexto") and a critical "analisis_descarte" \
-justifying why discarding it was correct.""",
+justifying why discarding it was correct.
+- Deduplication: merge near-identical concepts into a single one and remove \
+repeated supporting phrases; never return two winning concepts that mean the \
+same thing.""",
     "zh": """\
-角色：你是一名资深定性研究专家和高级数据分析师。请对访谈记录进行严谨、详尽的主题分析。
+角色：你是一名資深定性研究專家和高級資料分析師。請對訪談記錄進行嚴謹、詳盡的主題分析。
 
-背景：你正在多阶段分析的第 {current_layer} 层（Layer）。请使用 k-top 指标，\
-将文本中的观点和语句归纳为更宏观的概念，以确定最强、最相关的主题。
+背景：你正在多階段分析的第 {current_layer} 層（Layer）。請使用 k-top 指標，\
+將文本中的觀點和語句歸納為更宏觀的概念，以確定最強、最相關的主題。
 
-规则：
-- 提取与归纳：识别所有基础观点，并将其归纳为连贯的上层概念。
-- 胜出概念（k-top）：选出最强的 {k_top} 个概念。为每个概念赋予 "k_top_score"：\
-一个 0.0 到 1.0 之间的浮点数（越大越强），并在 "justificacion_agrupacion" 中\
-详细说明归纳理由。
-- 被舍弃的概念：识别未达到阈值的边缘或薄弱观点。为每个赋予 "motivo_descarte"\
-（简短类别，例如 "redundante"、"fuera_de_contexto"），并提供批判性的 \
-"analisis_descarte"，说明舍弃它为何是正确的。""",
+規則：
+- 提取與歸納：識別所有基礎觀點，並將其歸納為連貫的上層概念。
+- 勝出概念（k-top）：選出最強的 {k_top} 個概念。為每個概念賦予 "k_top_score"：\
+一個 0.0 到 1.0 之間的浮點數（越大越強），並在 "justificacion_agrupacion" 中\
+詳細說明歸納理由。
+- 被捨棄的概念：識別未達到閾值的邊緣或薄弱觀點。為每個賦予 "motivo_descarte"\
+（簡短類別，例如 "redundante"、"fuera_de_contexto"），並提供批判性的 \
+"analisis_descarte"，說明捨棄它為何是正確的。
+- 去重：將幾乎相同的概念合併為一個，並移除重複的來源語句；切勿返回兩個語意相同的\
+勝出概念。""",
 }
 
 # Hard, language-specific directive enforcing Spanish keys + localized values.
@@ -116,20 +124,41 @@ justificacion_agrupacion, conceptos_descartados, idea_descartada, \
 motivo_descarte, analisis_descarte, layer_level). DO NOT translate the keys.
 - All VALUES (concept names, justifications, phrases) must be written in ENGLISH.""",
     "zh": """\
-输出约束（不可违反）：
-- 只能返回一个有效的 JSON 对象，不要使用 Markdown。
-- JSON 的“键”（key）必须严格保持为模式中所示的西班牙语原文 \
+輸出約束（不可違反）：
+- 只能返回一個有效的 JSON 物件，不要使用 Markdown。
+- JSON 的「鍵」（key）必須嚴格保持為模式中所示的西班牙語原文 \
 （conceptos_ganadores、nombre_concepto、k_top_score、frases_origen、\
 justificacion_agrupacion、conceptos_descartados、idea_descartada、\
-motivo_descarte、analisis_descarte、layer_level）。不要翻译这些键名。
-- 所有“值”（概念名称、理由说明、引用语句）必须使用中文（简体）撰写。""",
+motivo_descarte、analisis_descarte、layer_level）。不要翻譯這些鍵名。
+- 所有「值」（概念名稱、理由說明、引用語句）必須使用繁體中文撰寫。""",
 }
 
 # Localized label that precedes the input text.
 _INPUT_LABEL: dict[Language, str] = {
     "es": "Entrada a analizar:",
     "en": "Input to analyze:",
-    "zh": "待分析的输入：",
+    "zh": "待分析的輸入：",
+}
+
+# Appended only on the LAST layer: force convergence into a single general
+# concept (the root idea that summarizes the whole interview).
+_FINAL_LAYER_DIRECTIVE: dict[Language, str] = {
+    "es": (
+        "IMPORTANTE — LAYER FINAL: Este es el último layer del análisis. Converge "
+        "TODOS los temas previos en UN ÚNICO concepto general y abarcador que "
+        "sintetice la idea central de toda la entrevista. Devuelve exactamente 1 "
+        "concepto ganador."
+    ),
+    "en": (
+        "IMPORTANT — FINAL LAYER: This is the last layer of the analysis. Converge "
+        "ALL prior themes into ONE single overarching general concept that "
+        "synthesizes the central idea of the whole interview. Return exactly 1 "
+        "winning concept."
+    ),
+    "zh": (
+        "重要——最終層級：這是分析的最後一層。請將先前所有主題收斂為一個單一、涵蓋全局的"
+        "總體概念，概括整場訪談的核心思想。僅返回 1 個勝出概念。"
+    ),
 }
 
 
@@ -138,17 +167,22 @@ def build_layer_prompt(
     interview_text_chunk: str,
     k_top: int,
     language: Language,
+    max_layers: int = 5,
 ) -> str:
     """
     Render the layer-analysis prompt for one Gemini run in `language`.
 
     The role/rules and the key directive are localized; the JSON schema (with
-    Spanish keys) is invariant across languages.
+    Spanish keys) is invariant across languages. On the final layer
+    (`current_layer == max_layers - 1`) a directive is appended instructing the
+    model to converge everything into a single general concept.
     """
     instructions = _INSTRUCTIONS[language].format(
         current_layer=current_layer,
         k_top=k_top,
     )
+    if current_layer >= max_layers - 1:
+        instructions = f"{instructions}\n\n{_FINAL_LAYER_DIRECTIVE[language]}"
     schema = _JSON_SCHEMA_BLOCK.format(current_layer=current_layer)
     directive = _KEY_DIRECTIVE[language]
     label = _INPUT_LABEL[language]

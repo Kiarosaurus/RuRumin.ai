@@ -31,6 +31,8 @@ RPM_LIMITS: dict[str, int] = {
     "gemini-3.5-flash-lite": 15,
     "gemini-2.5-flash": 5,
     "gemini-2.5-flash-lite": 10,
+    # Embedding model used for semantic concept dedup (separate, higher budget).
+    "text-embedding-004": 100,
 }
 
 # Conservative default for any model not listed above.

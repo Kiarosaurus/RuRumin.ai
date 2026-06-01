@@ -65,6 +65,22 @@ def get_runs_per_layer() -> int:
     return max(1, value)
 
 
+def get_embeddings_enabled() -> bool:
+    """
+    Whether semantic (embedding-based) concept de-duplication is on.
+
+    Reads EMBEDDINGS_ENABLED (default ON). Set to 0/false/no to fall back to the
+    cheaper lexical (character-bigram) de-duplication with no embedding calls.
+    """
+    raw = os.getenv("EMBEDDINGS_ENABLED", "1").strip().lower()
+    return raw not in {"0", "false", "no", "off", ""}
+
+
+def get_embedding_model() -> str:
+    """Embedding model id for semantic dedup. Override with EMBEDDING_MODEL."""
+    return os.getenv("EMBEDDING_MODEL", "").strip() or "text-embedding-004"
+
+
 def get_allowed_origins() -> list[str]:
     """
     Return the CORS allow-list.

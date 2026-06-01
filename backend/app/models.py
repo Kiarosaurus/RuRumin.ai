@@ -154,10 +154,14 @@ class AnalysisOptions(BaseModel):
     """Tunable parameters for an analysis run."""
 
     max_layers: int = Field(
-        default=3,
+        default=5,
         ge=1,
         le=10,
-        description="Maximum recursion depth of the analysis tree.",
+        description=(
+            "Recursion depth of the analysis tree. Defaults to 5 — every interview "
+            "gets at least 5 layers (the app never overrides this); the deepest "
+            "layer (the 5th) converges into the single general/overarching concept."
+        ),
     )
     k_top: int = Field(
         default=5,
