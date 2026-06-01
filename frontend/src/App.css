@@ -201,6 +201,23 @@ button {
   padding: 1.5rem;
   overflow: auto;
   border-right: 1px solid var(--border);
+  position: relative;
+}
+
+/* Floating idea counter, top-right of the text viewer. */
+.idea-counter {
+  position: sticky;
+  top: 0;
+  float: right;
+  margin-left: 1rem;
+  z-index: 5;
+  background: #0f172a;
+  color: #fff;
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.25);
 }
 
 .transcript {

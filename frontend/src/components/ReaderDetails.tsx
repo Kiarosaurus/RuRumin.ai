@@ -12,6 +12,7 @@ import { pastelFor } from "../utils/colors";
 import { flattenLayers } from "../utils/layers";
 import { tr } from "../utils/i18n";
 import { HighlightedText, type HighlightConcept } from "./HighlightedText";
+import { useIdeaNavigation } from "./useIdeaNavigation";
 
 interface Props {
   transcriptText: string;
@@ -35,11 +36,25 @@ export function ReaderDetails({ transcriptText, analysis, language }: Props) {
     [activeLayer],
   );
 
+  const nav = useIdeaNavigation(transcriptText, concepts);
+
   return (
     <div className="reader">
       <section className="reader-text">
+        {nav.ideas.length > 0 && (
+          <div className="idea-counter">
+            {tr(language, "reader.ideaCounter", {
+              current: nav.index < 0 ? 0 : nav.index + 1,
+              total: nav.ideas.length,
+            })}
+          </div>
+        )}
         <h2>{tr(language, "reader.detailsTitle")}</h2>
-        <HighlightedText text={transcriptText} concepts={concepts} />
+        <HighlightedText
+          text={transcriptText}
+          concepts={concepts}
+          focusedRange={nav.focusedRange}
+        />
       </section>
 
       <aside className="reader-panel">
@@ -63,11 +78,13 @@ export function ReaderDetails({ transcriptText, analysis, language }: Props) {
         <ul className="concept-list">
           {activeLayer?.discarded_concepts.map((c, i) => {
             const p = pastelFor(i);
+            const selected = nav.selectedId === c.id;
             return (
               <li
                 key={c.id}
-                className="concept-item"
+                className={`concept-item${selected ? " selected" : ""}`}
                 style={{ background: p.bg, borderColor: p.border, color: p.text }}
+                onClick={() => nav.toggleSelect(c.id)}
               >
                 <div className="concept-head">
                   <span className="concept-label">{c.label}</span>

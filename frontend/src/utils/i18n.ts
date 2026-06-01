@@ -31,6 +31,7 @@ export type UIKey =
   | "reader.discards"
   | "reader.noDiscards"
   | "reader.ktop"
+  | "reader.ideaCounter"
   | "tree.empty"
   | "tree.legendLayer"
   | "tree.legendConcept"
@@ -84,6 +85,7 @@ const ES: Record<UIKey, string> = {
   "reader.discards": "Análisis de descartes",
   "reader.noDiscards": "Sin descartes en este layer.",
   "reader.ktop": "k-top",
+  "reader.ideaCounter": "Idea {current} / {total}",
   "tree.empty": "No hay datos para mostrar.",
   "tree.legendLayer": "Layer",
   "tree.legendConcept": "Concepto",
@@ -140,6 +142,7 @@ const EN: Record<UIKey, string> = {
   "reader.discards": "Discard analysis",
   "reader.noDiscards": "No discards in this layer.",
   "reader.ktop": "k-top",
+  "reader.ideaCounter": "Idea {current} / {total}",
   "tree.empty": "No data to display.",
   "tree.legendLayer": "Layer",
   "tree.legendConcept": "Concept",
@@ -196,6 +199,7 @@ const ZH: Record<UIKey, string> = {
   "reader.discards": "捨棄分析",
   "reader.noDiscards": "該層沒有被捨棄的概念。",
   "reader.ktop": "k-top",
+  "reader.ideaCounter": "想法 {current} / {total}",
   "tree.empty": "暫無可顯示的資料。",
   "tree.legendLayer": "層級",
   "tree.legendConcept": "概念",
