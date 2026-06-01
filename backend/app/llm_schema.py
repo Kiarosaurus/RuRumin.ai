@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import List
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
 class GanadorLLM(BaseModel):
@@ -36,11 +36,25 @@ class GanadorLLM(BaseModel):
 
 
 class DescartadoLLM(BaseModel):
-    """A discarded concept as emitted by the model."""
+    """
+    A discarded concept as emitted by the model.
 
-    idea_descartada: str = Field(..., description="Idea tangencial o débil.")
+    Accepts common near-miss key spellings the model drifts to (observed in
+    production, more frequent on non-Spanish analysis languages): e.g.
+    `idea_descarte` for `idea_descartada`. Aliases keep one bad key from sinking
+    an otherwise valid layer. `populate_by_name` keeps the canonical names usable.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    idea_descartada: str = Field(
+        ...,
+        validation_alias=AliasChoices("idea_descartada", "idea_descarte"),
+        description="Idea tangencial o débil.",
+    )
     motivo_descarte: str = Field(
         ...,
+        validation_alias=AliasChoices("motivo_descarte", "motivo"),
         description="Categoría corta del motivo de descarte (ej. 'redundante').",
     )
     frases_origen: List[str] = Field(
@@ -49,6 +63,7 @@ class DescartadoLLM(BaseModel):
     )
     analisis_descarte: str = Field(
         ...,
+        validation_alias=AliasChoices("analisis_descarte", "analisis_descartado"),
         description="Análisis crítico de por qué el descarte fue correcto.",
     )
 
