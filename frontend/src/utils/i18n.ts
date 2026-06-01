@@ -45,6 +45,16 @@ export type UIKey =
   | "toast.noConnection"
   | "toast.error"
   | "toast.unexpected"
+  | "progress.starting"
+  | "progress.layer_start"
+  | "progress.calling_model"
+  | "progress.rate_limit_wait"
+  | "progress.model_fallback"
+  | "progress.validating"
+  | "progress.layer_done"
+  | "progress.finalizing"
+  | "progress.requests"
+  | "progress.layerCounter"
   | "lang.es"
   | "lang.en"
   | "lang.zh";
@@ -86,6 +96,17 @@ const ES: Record<UIKey, string> = {
   "toast.noConnection": "No hay conexión con el servidor",
   "toast.error": "Error {status}",
   "toast.unexpected": "Fallo inesperado",
+  "progress.starting": "Preparando análisis…",
+  "progress.layer_start": "Analizando layer {layer} de {max}…",
+  "progress.calling_model": "Consultando a {model} (intento {attempt})…",
+  "progress.rate_limit_wait":
+    "Límite de {rpm} req/min en {model}. Durmiendo {seconds} s…",
+  "progress.model_fallback": "{model} agotado. Cambiando a {next}…",
+  "progress.validating": "Validando respuesta del layer {layer}…",
+  "progress.layer_done": "Layer {layer} completado.",
+  "progress.finalizing": "Actualizando vistas…",
+  "progress.requests": "Solicitudes a Gemini: {count}",
+  "progress.layerCounter": "Layer {layer} / {max}",
   "lang.es": "Español",
   "lang.en": "Inglés",
   "lang.zh": "Mandarín",
@@ -128,6 +149,17 @@ const EN: Record<UIKey, string> = {
   "toast.noConnection": "No connection to the server",
   "toast.error": "Error {status}",
   "toast.unexpected": "Unexpected failure",
+  "progress.starting": "Preparing analysis…",
+  "progress.layer_start": "Analyzing layer {layer} of {max}…",
+  "progress.calling_model": "Calling {model} (attempt {attempt})…",
+  "progress.rate_limit_wait":
+    "{rpm} req/min limit on {model}. Sleeping {seconds} s…",
+  "progress.model_fallback": "{model} exhausted. Switching to {next}…",
+  "progress.validating": "Validating layer {layer} response…",
+  "progress.layer_done": "Layer {layer} done.",
+  "progress.finalizing": "Updating views…",
+  "progress.requests": "Gemini requests: {count}",
+  "progress.layerCounter": "Layer {layer} / {max}",
   "lang.es": "Spanish",
   "lang.en": "English",
   "lang.zh": "Mandarin",
@@ -170,6 +202,16 @@ const ZH: Record<UIKey, string> = {
   "toast.noConnection": "无法连接服务器",
   "toast.error": "错误 {status}",
   "toast.unexpected": "意外错误",
+  "progress.starting": "正在准备分析…",
+  "progress.layer_start": "正在分析第 {layer} / {max} 层…",
+  "progress.calling_model": "正在调用 {model}（第 {attempt} 次尝试）…",
+  "progress.rate_limit_wait": "{model} 达到每分钟 {rpm} 次上限。休眠 {seconds} 秒…",
+  "progress.model_fallback": "{model} 已用尽。切换到 {next}…",
+  "progress.validating": "正在校验第 {layer} 层的响应…",
+  "progress.layer_done": "第 {layer} 层已完成。",
+  "progress.finalizing": "正在更新视图…",
+  "progress.requests": "Gemini 请求数：{count}",
+  "progress.layerCounter": "第 {layer} / {max} 层",
   "lang.es": "西班牙语",
   "lang.en": "英语",
   "lang.zh": "中文",

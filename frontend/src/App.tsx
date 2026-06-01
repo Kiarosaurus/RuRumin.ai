@@ -13,8 +13,12 @@ import { ReaderDetails } from "./components/ReaderDetails";
 import { ReaderSummary } from "./components/ReaderSummary";
 import { Toast, type ToastState } from "./components/Toast";
 import { TreeView } from "./components/TreeView";
+import {
+  AnalysisProgressOverlay,
+  useAnalysisProgress,
+} from "./components/AnalysisProgress";
 import { MOCK_DOCUMENTS, type DocumentRecord } from "./data/mockData";
-import { analyzeTranscript, ApiError } from "./services/apiClient";
+import { analyzeTranscriptStream, ApiError } from "./services/apiClient";
 import type { Language } from "./types";
 import { tr } from "./utils/i18n";
 
@@ -28,6 +32,8 @@ export default function App() {
   const [language, setLanguage] = useState<Language>("es");
   const [toast, setToast] = useState<ToastState | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
+  const { state: progress, onProgress, reset: resetProgress } =
+    useAnalysisProgress();
 
   const notify = useCallback((next: ToastState) => {
     window.clearTimeout(toastTimer.current);
@@ -79,10 +85,12 @@ export default function App() {
       if (busyIds.includes(doc.id)) return;
 
       setBusyIds((prev) => [...prev, doc.id]);
+      resetProgress();
       try {
-        const analysis = await analyzeTranscript(
+        const analysis = await analyzeTranscriptStream(
           doc.transcript_text,
           doc.language,
+          onProgress,
           undefined,
           doc.filename,
         );
@@ -115,7 +123,7 @@ export default function App() {
         setBusyIds((prev) => prev.filter((id) => id !== doc.id));
       }
     },
-    [busyIds, notify],
+    [busyIds, notify, onProgress, resetProgress],
   );
 
   const hasAnalysis = active?.analysis != null;
@@ -183,6 +191,10 @@ export default function App() {
           <TreeView analysis={active.analysis} language={language} />
         )}
       </main>
+
+      {busyIds.length > 0 && (
+        <AnalysisProgressOverlay state={progress} language={language} />
+      )}
 
       <Toast toast={toast} onClose={() => setToast(null)} />
     </div>

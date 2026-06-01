@@ -9,13 +9,18 @@ import pytest
 from google.genai import errors as genai_errors
 
 import app.services.analyzer as analyzer
+from app.rate_limiter import LIMITER
 
 
 @pytest.fixture(autouse=True)
 def fast_retries(monkeypatch):
     """Remove real backoff sleeps so retry tests run instantly."""
     monkeypatch.setattr(analyzer, "RETRY_BACKOFF_SECONDS", 0)
+    # Clear the shared rate-limiter window so calls from earlier tests can't
+    # accumulate across the 60s window and trigger a real sleep mid-suite.
+    LIMITER.reset()
     yield
+    LIMITER.reset()
 
 
 def make_api_error(code: int) -> genai_errors.APIError:

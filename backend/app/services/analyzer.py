@@ -37,6 +37,7 @@ from app.models import (
     AnalysisStatus,
 )
 from app.prompts import build_layer_prompt
+from app.rate_limiter import LIMITER, Emit, _noop
 from app.services.mapping import llm_output_to_layer
 
 logger = logging.getLogger("rurumin.analyzer")
@@ -74,17 +75,30 @@ def _is_retryable(exc: genai_errors.APIError) -> bool:
     return getattr(exc, "code", None) in RETRYABLE_STATUS
 
 
-async def run_thematic_analysis(request: AnalysisRequest) -> AnalysisResponse:
+async def run_thematic_analysis(
+    request: AnalysisRequest,
+    emit: Emit = _noop,
+) -> AnalysisResponse:
     """
     Orchestrate the full multi-layer thematic analysis and return the
     contract-valid response.
+
+    `emit` is an async progress sink (see app.rate_limiter.Emit). It receives
+    plain dict events describing each phase — layer start, model call, rate-limit
+    waits, validation, finalizing — so a streaming endpoint can relay live
+    progress to the UI. Defaults to a no-op for the plain (non-streaming) path.
     """
+    max_layers = request.options.max_layers
+    await emit({"type": "progress", "phase": "starting", "max_layers": max_layers})
+
     root_layer = await _analyze_layer(
         request=request,
         text_chunk=request.transcript_text,
         level=0,
+        emit=emit,
     )
 
+    await emit({"type": "progress", "phase": "finalizing"})
     total_layers = _count_layers(root_layer)
     return AnalysisResponse(
         request_id=str(uuid.uuid4()),
@@ -104,11 +118,22 @@ async def _analyze_layer(
     request: AnalysisRequest,
     text_chunk: str,
     level: int,
+    emit: Emit = _noop,
 ) -> AnalysisLayer:
     """
     Run one layer (prompt -> model -> validate -> map) and recurse on winners.
     """
     k = request.options.k_top
+    max_layers = request.options.max_layers
+
+    await emit(
+        {
+            "type": "progress",
+            "phase": "layer_start",
+            "layer": level,
+            "max_layers": max_layers,
+        }
+    )
 
     # 1. build the prompt for this layer in the requested language
     prompt = build_layer_prompt(
@@ -122,10 +147,13 @@ async def _analyze_layer(
     raw_output = await _call_gemini(
         prompt=prompt,
         language=request.language,
+        emit=emit,
+        level=level,
     )
 
     # 3. validate the raw JSON against the LLM schema. A model that ignores the
     #    schema (despite JSON mode) is an upstream failure -> 502 Bad Gateway.
+    await emit({"type": "progress", "phase": "validating", "layer": level})
     try:
         llm_output = LayerLLMOutput.parse_model_text(raw_output)
     except (ValidationError, ValueError) as exc:
@@ -139,14 +167,17 @@ async def _analyze_layer(
 
     # 4. map onto the transport contract
     layer = llm_output_to_layer(llm_output, layer_id=f"layer-{level}", k=k)
+    await emit({"type": "progress", "phase": "layer_done", "layer": level})
 
     # 5. recurse on the winners until max_layers is reached
-    if level + 1 < request.options.max_layers and layer.winning_concepts:
+    if level + 1 < max_layers and layer.winning_concepts:
         # Feed the winners' justifications forward as the next chunk. The real
         # implementation will re-chunk the source text around the winners.
         next_chunk = "\n".join(c.grouping_justification for c in layer.winning_concepts)
         layer.sub_layers = [
-            await _analyze_layer(request=request, text_chunk=next_chunk, level=level + 1)
+            await _analyze_layer(
+                request=request, text_chunk=next_chunk, level=level + 1, emit=emit
+            )
         ]
 
     return layer
@@ -182,6 +213,8 @@ async def _attempt_model(
     prompt: str,
     config: genai_types.GenerateContentConfig,
     model: str,
+    emit: Emit = _noop,
+    level: int | None = None,
 ) -> str:
     """
     Try a single model with timeout + bounded retries.
@@ -190,10 +223,25 @@ async def _attempt_model(
     backoff. Raises `_ModelExhausted` when the model gives up — either after
     exhausting retries or on the first non-retryable API error — so the caller
     can fall back to the next model.
+
+    Each attempt first passes through the per-model rate limiter, which sleeps
+    when the model's free-tier RPM window is full (proactively avoiding 429s).
     """
     last_error: Exception | None = None
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
+            # Pace against the model's RPM before spending an attempt. Emits a
+            # `rate_limit_wait` event (with countdown) if it has to sleep.
+            await LIMITER.acquire(model, emit, layer=level)
+            await emit(
+                {
+                    "type": "progress",
+                    "phase": "calling_model",
+                    "model": model,
+                    "attempt": attempt,
+                    "layer": level,
+                }
+            )
             response = await asyncio.wait_for(
                 client.aio.models.generate_content(
                     model=model,
@@ -217,7 +265,12 @@ async def _attempt_model(
     raise _ModelExhausted(last_error)
 
 
-async def _call_gemini(prompt: str, language: str = "es") -> str:
+async def _call_gemini(
+    prompt: str,
+    language: str = "es",
+    emit: Emit = _noop,
+    level: int | None = None,
+) -> str:
     """
     Call the model cascade and return the first successful raw JSON response.
 
@@ -241,7 +294,7 @@ async def _call_gemini(prompt: str, language: str = "es") -> str:
     last_error: Exception | None = None
     for index, model in enumerate(MODEL_CASCADE):
         try:
-            return await _attempt_model(client, prompt, config, model)
+            return await _attempt_model(client, prompt, config, model, emit, level)
         except _ModelExhausted as exc:
             last_error = exc.cause
             has_fallback = index < len(MODEL_CASCADE) - 1
@@ -253,6 +306,16 @@ async def _call_gemini(prompt: str, language: str = "es") -> str:
                     model,
                     code,
                     next_model,
+                )
+                await emit(
+                    {
+                        "type": "progress",
+                        "phase": "model_fallback",
+                        "model": model,
+                        "next_model": next_model,
+                        "reason": str(code),
+                        "layer": level,
+                    }
                 )
 
     raise HTTPException(

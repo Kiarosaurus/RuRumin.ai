@@ -379,6 +379,35 @@ button {
   font-weight: 600;
 }
 
+.progress-headline {
+  margin: 0;
+  max-width: 32rem;
+  padding: 0 1rem;
+  text-align: center;
+}
+
+.progress-bar {
+  width: min(420px, 70%);
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.25);
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: #2563eb;
+  transition: width 0.4s ease;
+}
+
+.progress-meta {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #475569;
+}
+
 button:disabled .spinner {
   border-top-color: #64748b;
 }

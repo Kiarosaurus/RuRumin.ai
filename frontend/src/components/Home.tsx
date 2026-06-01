@@ -9,14 +9,18 @@
 
 import { useRef, useState } from "react";
 import type { DocumentRecord } from "../data/mockData";
-import { analyzeTranscript, ApiError } from "../services/apiClient";
+import { analyzeTranscriptStream, ApiError } from "../services/apiClient";
 import {
   DocxExtractionError,
   extractDocxText,
 } from "../services/docxExtractor";
 import type { Language } from "../types";
 import { LANGUAGE_OPTIONS, tr, type UIKey } from "../utils/i18n";
-import { LoadingOverlay, Spinner } from "./Spinner";
+import {
+  AnalysisProgressOverlay,
+  useAnalysisProgress,
+} from "./AnalysisProgress";
+import { Spinner } from "./Spinner";
 import type { ToastState } from "./Toast";
 
 interface Props {
@@ -50,20 +54,24 @@ export function Home({
 }: Props) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [isAnalyzing, setAnalyzing] = useState(false);
+  const { state: progress, onProgress, reset: resetProgress } =
+    useAnalysisProgress();
 
   async function handleFile(file: File | undefined) {
     if (fileInput.current) fileInput.current.value = "";
     if (!file || isAnalyzing) return;
 
+    resetProgress();
     setAnalyzing(true);
     try {
       // 1. Extract clean text from the .docx (rejects non-Word files).
       const extracted = await extractDocxText(file, language);
 
-      // 2. Send to the backend in the selected language.
-      const analysis = await analyzeTranscript(
+      // 2. Stream the analysis so the overlay shows live progress.
+      const analysis = await analyzeTranscriptStream(
         extracted.text,
         language,
+        onProgress,
         undefined,
         extracted.filename,
       );
@@ -107,7 +115,9 @@ export function Home({
 
   return (
     <div className="view">
-      {isAnalyzing && <LoadingOverlay message={tr(language, "home.analyzing")} />}
+      {isAnalyzing && (
+        <AnalysisProgressOverlay state={progress} language={language} />
+      )}
 
       <header className="view-header">
         <h1>{tr(language, "home.title")}</h1>

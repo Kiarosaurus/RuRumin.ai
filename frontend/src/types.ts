@@ -111,6 +111,42 @@ export interface AnalysisMetadata {
   created_at: string;
 }
 
+/**
+ * Live progress phases streamed by POST /api/analyze-transcript/stream.
+ * Mirrors the `phase` values emitted by the backend analyzer.
+ */
+export type ProgressPhase =
+  | "starting"
+  | "layer_start"
+  | "calling_model"
+  | "rate_limit_wait"
+  | "model_fallback"
+  | "validating"
+  | "layer_done"
+  | "finalizing";
+
+/** One NDJSON progress line from the streaming endpoint. */
+export interface ProgressEvent {
+  type: "progress";
+  phase: ProgressPhase;
+  /** Model being called / that was exhausted. */
+  model?: string;
+  /** Next model in the cascade (model_fallback). */
+  next_model?: string;
+  /** Why the current model was abandoned (model_fallback). */
+  reason?: string;
+  /** Retry attempt number for this model (calling_model). */
+  attempt?: number;
+  /** 0-based layer index this event refers to. */
+  layer?: number;
+  /** Maximum recursion depth for this run. */
+  max_layers?: number;
+  /** Seconds the backend will sleep to respect the RPM (rate_limit_wait). */
+  sleep_seconds?: number;
+  /** The model's requests-per-minute ceiling (rate_limit_wait). */
+  rpm?: number;
+}
+
 /** Top-level response from POST /api/analyze-transcript. Mirrors `AnalysisResponse`. */
 export interface AnalysisResponse {
   /** Identifier for this analysis job. */
