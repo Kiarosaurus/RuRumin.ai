@@ -46,7 +46,7 @@ def _request(language: str = "es") -> AnalysisRequest:
     return AnalysisRequest(
         transcript_text="el costo importa",
         language=language,
-        options={"max_layers": 1, "k_top": 1},
+        options={"max_layers": 2, "k_top": 1},
     )
 
 
@@ -154,20 +154,24 @@ async def test_forced_runs_per_layer(monkeypatch):
     monkeypatch.setattr(analyzer, "RUNS_PER_LAYER", 5)
     gen = install_fake_client(monkeypatch, return_value=gemini_response(VALID_JSON))
 
-    resp = await analyzer.run_thematic_analysis(_request())  # max_layers=1
+    resp = await analyzer.run_thematic_analysis(_request())  # max_layers=2
 
-    # One layer x 5 forced runs = 5 model calls, all reported in metadata.
-    assert gen.call_count == 5
-    assert resp.metadata.total_runs == 5
+    # Two layers x 5 forced runs = 10 model calls, all reported in metadata.
+    assert gen.call_count == 10
+    assert resp.metadata.total_runs == 10
 
 
 async def test_malformed_run_tolerated_if_another_run_is_valid(monkeypatch):
     monkeypatch.setattr(analyzer, "RUNS_PER_LAYER", 3)
-    # First run malformed, the next two valid -> layer still succeeds.
+    # Layer 0: first run malformed, next two valid -> layer still succeeds.
+    # With max_layers=2 the winners recurse into layer 1 (3 more valid runs).
     gen = install_fake_client(
         monkeypatch,
         side_effect=[
             gemini_response("no soy json {"),
+            gemini_response(VALID_JSON),
+            gemini_response(VALID_JSON),
+            gemini_response(VALID_JSON),
             gemini_response(VALID_JSON),
             gemini_response(VALID_JSON),
         ],
@@ -175,5 +179,5 @@ async def test_malformed_run_tolerated_if_another_run_is_valid(monkeypatch):
 
     resp = await analyzer.run_thematic_analysis(_request())
 
-    assert gen.call_count == 3
+    assert gen.call_count == 6
     assert resp.root_layer.winning_concepts[0].label == "Costo"
