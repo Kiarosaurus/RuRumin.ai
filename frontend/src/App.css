@@ -210,15 +210,20 @@ button {
   font-size: 0.95rem;
 }
 
-.mark-win {
-  background: var(--win);
+/* Color-coded, overlap-aware highlight span. */
+.hl {
   padding: 0 2px;
   border-radius: 3px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  transition: box-shadow 0.15s ease;
 }
 
-.mark-discard {
-  background: var(--discard);
-  padding: 0 2px;
+/* Keyboard-navigation focus ring on the current idea. */
+.idea-focused {
+  outline: 2px solid #0f172a;
+  outline-offset: 1px;
+  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.18);
   border-radius: 3px;
 }
 
@@ -256,17 +261,22 @@ button {
 
 .concept-item {
   border: 1px solid var(--border);
+  border-left-width: 5px;
   border-radius: 8px;
   padding: 0.6rem 0.75rem;
   background: #fff;
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.15s ease;
 }
 
-.concept-item.win {
-  border-left: 4px solid #16a34a;
+.concept-item:hover {
+  transform: translateY(-1px);
 }
 
-.concept-item.discard {
-  border-left: 4px solid #dc2626;
+/* Selected concept (toggle) gets a stronger ring in its own tone. */
+.concept-item.selected {
+  box-shadow: 0 0 0 2px currentColor inset;
+  font-weight: 600;
 }
 
 .concept-head {
@@ -291,6 +301,7 @@ button {
   margin: 0.4rem 0 0;
   font-size: 0.85rem;
   color: #334155;
+  white-space: pre-line; /* render the 3-4 paragraph justifications */
 }
 
 /* ---------- Tree (Mode 3) ---------- */
