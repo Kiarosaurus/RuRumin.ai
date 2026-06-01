@@ -55,6 +55,8 @@ export type UIKey =
   | "progress.finalizing"
   | "progress.requests"
   | "progress.layerCounter"
+  | "a11y.loading"
+  | "a11y.close"
   | "lang.es"
   | "lang.en"
   | "lang.zh";
@@ -108,6 +110,8 @@ const ES: Record<UIKey, string> = {
   "progress.finalizing": "Actualizando vistas…",
   "progress.requests": "Solicitudes a Gemini: {count}",
   "progress.layerCounter": "Layer {layer} / {max}",
+  "a11y.loading": "Cargando",
+  "a11y.close": "Cerrar",
   "lang.es": "Español",
   "lang.en": "Inglés",
   "lang.zh": "Mandarín",
@@ -162,62 +166,66 @@ const EN: Record<UIKey, string> = {
   "progress.finalizing": "Updating views…",
   "progress.requests": "Gemini requests: {count}",
   "progress.layerCounter": "Layer {layer} / {max}",
+  "a11y.loading": "Loading",
+  "a11y.close": "Close",
   "lang.es": "Spanish",
   "lang.en": "English",
   "lang.zh": "Mandarin",
 };
 
 const ZH: Record<UIKey, string> = {
-  "nav.home": "主页",
+  "nav.home": "主頁",
   "nav.summary": "摘要",
-  "nav.details": "详情",
-  "nav.tree": "树状图",
-  "home.title": "文档库",
-  "home.language": "分析语言",
-  "home.import": "+ 导入 .docx",
+  "nav.details": "詳情",
+  "nav.tree": "樹狀圖",
+  "home.title": "文件庫",
+  "home.language": "分析語言",
+  "home.import": "+ 匯入 .docx",
   "home.analyzing": "分析中…",
-  "status.processed": "已处理",
-  "status.processing": "处理中…",
-  "status.failed": "错误",
+  "status.processed": "已處理",
+  "status.processing": "處理中…",
+  "status.failed": "錯誤",
   "status.reanalyzing": "重新分析中…",
-  "action.open": "打开",
+  "action.open": "開啟",
   "action.reanalyze": "重新分析",
-  "action.delete": "删除",
-  "reader.summaryTitle": "摘要 — 胜出语句",
-  "reader.detailsTitle": "详情 — 被舍弃语句",
-  "reader.layers": "层级",
-  "reader.winners": "胜出概念",
-  "reader.discards": "舍弃分析",
-  "reader.noDiscards": "该层没有被舍弃的概念。",
+  "action.delete": "刪除",
+  "reader.summaryTitle": "摘要 — 勝出語句",
+  "reader.detailsTitle": "詳情 — 被捨棄語句",
+  "reader.layers": "層級",
+  "reader.winners": "勝出概念",
+  "reader.discards": "捨棄分析",
+  "reader.noDiscards": "該層沒有被捨棄的概念。",
   "reader.ktop": "k-top",
-  "tree.empty": "暂无可显示的数据。",
-  "tree.legendLayer": "层级",
+  "tree.empty": "暫無可顯示的資料。",
+  "tree.legendLayer": "層級",
   "tree.legendConcept": "概念",
-  "docx.unsupported": "仅支持 Word .docx 文档。收到的是：“{name}”。",
-  "docx.empty": "文档“{name}”没有可提取的文本。",
-  "docx.readError": "无法读取文档“{name}”。",
-  "confirm.delete": "确定要从文档库中删除此文档吗？",
-  "toast.analyzed": "“{name}” 已分析。",
-  "toast.reanalyzed": "“{name}” 已重新分析。",
-  "toast.deleted": "文档已删除。",
-  "toast.noText": "没有可重新分析的文本。",
-  "toast.noConnection": "无法连接服务器",
-  "toast.error": "错误 {status}",
-  "toast.unexpected": "意外错误",
-  "progress.starting": "正在准备分析…",
-  "progress.layer_start": "正在分析第 {layer} / {max} 层…",
+  "docx.unsupported": "僅支援 Word .docx 文件。收到的是：「{name}」。",
+  "docx.empty": "文件「{name}」沒有可擷取的文字。",
+  "docx.readError": "無法讀取文件「{name}」。",
+  "confirm.delete": "確定要從文件庫中刪除此文件嗎？",
+  "toast.analyzed": "「{name}」已分析。",
+  "toast.reanalyzed": "「{name}」已重新分析。",
+  "toast.deleted": "文件已刪除。",
+  "toast.noText": "沒有可重新分析的文字。",
+  "toast.noConnection": "無法連線伺服器",
+  "toast.error": "錯誤 {status}",
+  "toast.unexpected": "意外錯誤",
+  "progress.starting": "正在準備分析…",
+  "progress.layer_start": "正在分析第 {layer} / {max} 層…",
   "progress.calling_model":
-    "正在调用 {model} · 第 {run}/{runs} 次运行（第 {attempt} 次尝试）…",
-  "progress.rate_limit_wait": "{model} 达到每分钟 {rpm} 次上限。休眠 {seconds} 秒…",
-  "progress.model_fallback": "{model} 已用尽。切换到 {next}…",
-  "progress.validating": "正在校验第 {layer} 层的响应…",
-  "progress.layer_done": "第 {layer} 层已完成。",
-  "progress.finalizing": "正在更新视图…",
-  "progress.requests": "Gemini 请求数：{count}",
-  "progress.layerCounter": "第 {layer} / {max} 层",
-  "lang.es": "西班牙语",
-  "lang.en": "英语",
-  "lang.zh": "中文",
+    "正在呼叫 {model} · 第 {run}/{runs} 次執行（第 {attempt} 次嘗試）…",
+  "progress.rate_limit_wait": "{model} 達到每分鐘 {rpm} 次上限。休眠 {seconds} 秒…",
+  "progress.model_fallback": "{model} 已用盡。切換到 {next}…",
+  "progress.validating": "正在驗證第 {layer} 層的回應…",
+  "progress.layer_done": "第 {layer} 層已完成。",
+  "progress.finalizing": "正在更新檢視…",
+  "progress.requests": "Gemini 請求數：{count}",
+  "progress.layerCounter": "第 {layer} / {max} 層",
+  "a11y.loading": "載入中",
+  "a11y.close": "關閉",
+  "lang.es": "西班牙語",
+  "lang.en": "英語",
+  "lang.zh": "繁體中文",
 };
 
 const TRANSLATIONS: Record<Language, Record<UIKey, string>> = {
@@ -228,6 +236,17 @@ const TRANSLATIONS: Record<Language, Record<UIKey, string>> = {
 
 /** Ordered list for rendering the language selector. */
 export const LANGUAGE_OPTIONS: Language[] = ["es", "en", "zh"];
+
+/**
+ * Native language names (endonyms) shown verbatim in the language picker,
+ * regardless of the active UI language. Intentionally NOT routed through `tr`:
+ * a selector should always present each option in its own language.
+ */
+export const LANGUAGE_LABELS: Record<Language, string> = {
+  es: "Español",
+  en: "English",
+  zh: "繁體中文",
+};
 
 /** Translate `key` into `lang`, interpolating `{var}` placeholders. */
 export function tr(

@@ -3,15 +3,17 @@
 interface SpinnerProps {
   /** Diameter in px. */
   size?: number;
+  /** Localized accessible label. Pass `tr(language, "a11y.loading")`. */
+  label?: string;
 }
 
-export function Spinner({ size = 18 }: SpinnerProps) {
+export function Spinner({ size = 18, label = "Cargando" }: SpinnerProps) {
   return (
     <span
       className="spinner"
       style={{ width: size, height: size, borderWidth: Math.max(2, size / 9) }}
       role="status"
-      aria-label="Cargando"
+      aria-label={label}
     />
   );
 }

@@ -52,7 +52,7 @@ export function ReaderDetails({ transcriptText, analysis, language }: Props) {
               className={l.level === activeLevel ? "active" : ""}
               onClick={() => setActiveLevel(l.level)}
             >
-              Layer {l.level}
+              {tr(language, "tree.legendLayer")} {l.level}
             </button>
           ))}
         </div>

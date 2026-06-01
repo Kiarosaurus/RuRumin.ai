@@ -15,7 +15,7 @@ import {
   extractDocxText,
 } from "../services/docxExtractor";
 import type { Language } from "../types";
-import { LANGUAGE_OPTIONS, tr, type UIKey } from "../utils/i18n";
+import { LANGUAGE_LABELS, LANGUAGE_OPTIONS, tr, type UIKey } from "../utils/i18n";
 import {
   AnalysisProgressOverlay,
   useAnalysisProgress,
@@ -131,7 +131,7 @@ export function Home({
             >
               {LANGUAGE_OPTIONS.map((code) => (
                 <option key={code} value={code}>
-                  {tr(language, `lang.${code}` as UIKey)}
+                  {LANGUAGE_LABELS[code]}
                 </option>
               ))}
             </select>
@@ -147,7 +147,7 @@ export function Home({
           <button onClick={() => fileInput.current?.click()} disabled={isAnalyzing}>
             {isAnalyzing ? (
               <>
-                <Spinner /> {tr(language, "home.analyzing")}
+                <Spinner label={tr(language, "a11y.loading")} /> {tr(language, "home.analyzing")}
               </>
             ) : (
               tr(language, "home.import")
@@ -183,7 +183,7 @@ export function Home({
                 disabled={!doc.transcript_text.trim() || busyIds.includes(doc.id)}
                 onClick={() => onReanalyze(doc)}
               >
-                {busyIds.includes(doc.id) ? <Spinner /> : tr(language, "action.reanalyze")}
+                {busyIds.includes(doc.id) ? <Spinner label={tr(language, "a11y.loading")} /> : tr(language, "action.reanalyze")}
               </button>
               <button
                 className="danger"

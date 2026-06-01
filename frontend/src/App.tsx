@@ -196,7 +196,7 @@ export default function App() {
         <AnalysisProgressOverlay state={progress} language={language} />
       )}
 
-      <Toast toast={toast} onClose={() => setToast(null)} />
+      <Toast toast={toast} language={language} onClose={() => setToast(null)} />
     </div>
   );
 }

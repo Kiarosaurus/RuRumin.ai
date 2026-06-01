@@ -178,7 +178,7 @@ export function AnalysisProgressOverlay({ state, language }: OverlayProps) {
 
   return (
     <div className="loading-overlay" role="alert" aria-busy="true">
-      <Spinner size={40} />
+      <Spinner size={40} label={tr(language, "a11y.loading")} />
       <p className="progress-headline">{phaseMessage(state, language, remaining)}</p>
 
       <div
