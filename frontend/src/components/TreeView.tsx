@@ -1,24 +1,32 @@
 /**
- * Mode 3 — Hierarchical tree (zoomable).
+ * Mode 3 — Concept DAG (Directed Acyclic Graph).
  *
- * Uses reactflow to render the analysis as a tree: each layer expands into its
- * winning concepts (macro -> base ideas as you go deeper). reactflow provides
- * pan + zoom (mouse wheel / Controls) out of the box.
+ * The analysis is no longer a strict tree: a phrase can feed several concepts,
+ * and granular concepts roll up into macro ones. We render a bottom-up DAG with
+ * reactflow, laid out by dagre:
+ *   - Granular concepts (lower layers) sit at the BOTTOM.
+ *   - Macro concepts (deeper layers, more general) rise to the TOP.
+ *   - Each concept of a layer feeds every concept of the next, more-general
+ *     layer (multiple connections per node).
  *
- * Layout: a simple deterministic placement — depth maps to X (columns), and
- * nodes stack on Y within their column. Good enough for a Phase-3 placeholder;
- * swap for dagre/elk later if the trees grow large.
+ * Nodes are small, clean rectangles showing only the concept name, painted with
+ * the same pastel color the readers use. Long justifications are NOT shown here.
  */
 
 import { useMemo } from "react";
 import ReactFlow, {
   Background,
   Controls,
+  MarkerType,
+  Position,
   type Edge,
   type Node,
 } from "reactflow";
 import "reactflow/dist/style.css";
-import type { AnalysisLayer, AnalysisResponse, Language } from "../types";
+import dagre from "dagre";
+import type { AnalysisResponse, Language } from "../types";
+import { pastelFor } from "../utils/colors";
+import { flattenLayers } from "../utils/layers";
 import { tr } from "../utils/i18n";
 
 interface Props {
@@ -26,73 +34,82 @@ interface Props {
   language: Language;
 }
 
-const COL_WIDTH = 280;
-const ROW_HEIGHT = 90;
+const NODE_W = 184;
+const NODE_H = 46;
 
-interface Built {
-  nodes: Node[];
-  edges: Edge[];
-}
-
-/** Walk the tree and emit reactflow nodes/edges with a column-per-depth layout. */
-function buildGraph(root: AnalysisLayer, language: Language): Built {
+/** Build pastel concept nodes + cross-layer edges, positioned by dagre (BT). */
+function buildDag(analysis: AnalysisResponse): { nodes: Node[]; edges: Edge[] } {
+  const layers = flattenLayers(analysis.root_layer); // index 0 = most granular
   const nodes: Node[] = [];
   const edges: Edge[] = [];
-  // Running Y cursor per depth column so siblings don't overlap.
-  const yByDepth: Record<number, number> = {};
 
-  const nextY = (depth: number): number => {
-    const y = yByDepth[depth] ?? 0;
-    yByDepth[depth] = y + ROW_HEIGHT;
-    return y;
-  };
-
-  const walk = (layer: AnalysisLayer, parentId: string | null) => {
-    const layerId = `layer-${layer.level}`;
-    nodes.push({
-      id: layerId,
-      position: { x: layer.level * COL_WIDTH, y: nextY(layer.level) },
-      data: { label: `${tr(language, "tree.legendLayer")} ${layer.level}` },
-      style: { background: "#1f2937", color: "#fff", borderRadius: 8, fontWeight: 600 },
-    });
-    if (parentId) {
-      edges.push({ id: `${parentId}->${layerId}`, source: parentId, target: layerId });
-    }
-
-    // Concept nodes sit in a half-column to the right of their layer node.
-    layer.winning_concepts.forEach((c) => {
+  layers.forEach((layer) => {
+    layer.winning_concepts.forEach((c, i) => {
+      const p = pastelFor(i);
       nodes.push({
         id: c.id,
-        position: {
-          x: layer.level * COL_WIDTH + COL_WIDTH / 2,
-          y: nextY(layer.level),
-        },
-        data: {
-          label: `${c.label}\n(${tr(language, "reader.ktop")} ${c.k_top_score.toFixed(2)})`,
-        },
+        data: { label: c.label },
+        position: { x: 0, y: 0 }, // overwritten by dagre below
+        sourcePosition: Position.Top,
+        targetPosition: Position.Bottom,
         style: {
-          background: "#dcfce7",
-          border: "1px solid #16a34a",
-          borderRadius: 6,
-          whiteSpace: "pre-line",
+          width: NODE_W,
+          height: NODE_H,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          textAlign: "center",
+          padding: "0 10px",
+          background: p.bg,
+          border: `1.5px solid ${p.border}`,
+          color: p.text,
+          borderRadius: 10,
           fontSize: 12,
+          fontWeight: 600,
+          overflow: "hidden",
+          whiteSpace: "nowrap",
+          textOverflow: "ellipsis",
         },
       });
-      edges.push({ id: `${layerId}->${c.id}`, source: layerId, target: c.id });
     });
+  });
 
-    layer.sub_layers.forEach((child) => walk(child, layerId));
-  };
+  // Granular layer (L) feeds the more-general layer (L+1): full bipartite.
+  for (let li = 0; li < layers.length - 1; li++) {
+    const lower = layers[li].winning_concepts;
+    const upper = layers[li + 1].winning_concepts;
+    for (const s of lower) {
+      for (const t of upper) {
+        edges.push({
+          id: `${s.id}->${t.id}`,
+          source: s.id,
+          target: t.id,
+          type: "smoothstep",
+          markerEnd: { type: MarkerType.ArrowClosed, color: "#94a3b8" },
+          style: { stroke: "#94a3b8", strokeWidth: 1 },
+        });
+      }
+    }
+  }
 
-  walk(root, null);
+  // dagre layout: bottom-to-top so macro concepts end up on top.
+  const g = new dagre.graphlib.Graph();
+  g.setGraph({ rankdir: "BT", nodesep: 28, ranksep: 70, marginx: 20, marginy: 20 });
+  g.setDefaultEdgeLabel(() => ({}));
+  nodes.forEach((n) => g.setNode(n.id, { width: NODE_W, height: NODE_H }));
+  edges.forEach((e) => g.setEdge(e.source, e.target));
+  dagre.layout(g);
+  nodes.forEach((n) => {
+    const pos = g.node(n.id);
+    // dagre gives the node center; reactflow wants the top-left corner.
+    n.position = { x: pos.x - NODE_W / 2, y: pos.y - NODE_H / 2 };
+  });
+
   return { nodes, edges };
 }
 
 export function TreeView({ analysis, language }: Props) {
-  const { nodes, edges } = useMemo(
-    () => buildGraph(analysis.root_layer, language),
-    [analysis, language],
-  );
+  const { nodes, edges } = useMemo(() => buildDag(analysis), [analysis]);
 
   if (nodes.length === 0) {
     return (
@@ -104,10 +121,6 @@ export function TreeView({ analysis, language }: Props) {
 
   return (
     <div className="tree-view">
-      <div className="tree-legend">
-        <span className="legend-item legend-layer">{tr(language, "tree.legendLayer")}</span>
-        <span className="legend-item legend-concept">{tr(language, "tree.legendConcept")}</span>
-      </div>
       <ReactFlow nodes={nodes} edges={edges} fitView minZoom={0.2} maxZoom={2}>
         <Background />
         <Controls />
