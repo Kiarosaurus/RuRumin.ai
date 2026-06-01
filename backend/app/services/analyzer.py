@@ -45,7 +45,7 @@ from app.services.mapping import llm_output_to_layer
 logger = logging.getLogger("rurumin.analyzer")
 
 # --- Resilience tuning ----------------------------------------------------- #
-GEMINI_TIMEOUT_SECONDS = 60.0
+GEMINI_TIMEOUT_SECONDS = 120.0
 MAX_ATTEMPTS = 3  # per model: 1 initial try + 2 retries
 RETRY_BACKOFF_SECONDS = 1.5  # multiplied by the attempt number
 RETRYABLE_STATUS = {429, 503}  # rate-limited / service unavailable
@@ -157,13 +157,12 @@ async def _analyze_layer(
         max_layers=max_layers,
     )
 
-    # 2. forced repetition: run the cascade `runs` times. Each run yields a raw
-    #    JSON string; we keep every well-formed candidate and discard malformed
-    #    ones (a single bad run must not sink the whole layer). A 502 from
-    #    `_call_gemini` means the cascade is fully exhausted (no quota left) and
-    #    propagates — there is no point continuing the remaining runs.
-    candidates: list[AnalysisLayer] = []
-    for run in range(1, runs + 1):
+    # 2. forced repetition: run the cascade `runs` times CONCURRENTLY. Sequential
+    #    runs blew past Cloud Run's request timeout; firing them in parallel cuts
+    #    wall-time ~Nx (they fit within the model's RPM). Each run returns a parsed
+    #    LayerLLMOutput or raises (schema error / cascade-exhausted 502). A single
+    #    bad run must not sink the layer; we keep every valid one.
+    async def _run_once(run: int) -> LayerLLMOutput:
         logger.info("Layer %d - Run %d/%d: solicitando análisis.", level, run, runs)
         raw_output = await _call_gemini(
             prompt=prompt,
@@ -173,26 +172,38 @@ async def _analyze_layer(
             run=run,
             runs=runs,
         )
-
-        # 3. validate the raw JSON against the LLM schema.
         await emit(
             {"type": "progress", "phase": "validating", "layer": level, "run": run, "runs": runs}
         )
-        try:
-            llm_output = LayerLLMOutput.parse_model_text(raw_output)
-        except (ValidationError, ValueError) as exc:
+        return LayerLLMOutput.parse_model_text(raw_output)
+
+    results = await asyncio.gather(
+        *(_run_once(run) for run in range(1, runs + 1)),
+        return_exceptions=True,
+    )
+
+    candidates: list[AnalysisLayer] = []
+    cascade_error: BaseException | None = None
+    for run, result in enumerate(results, start=1):
+        if isinstance(result, LayerLLMOutput):
+            candidates.append(llm_output_to_layer(result, layer_id=f"layer-{level}", k=k))
+        elif isinstance(result, (ValidationError, ValueError)):
             logger.warning(
                 "Layer %d - Run %d/%d: respuesta no cumple el esquema (%s). Run descartado.",
                 level,
                 run,
                 runs,
-                exc,
+                result,
             )
-            continue
-        candidates.append(llm_output_to_layer(llm_output, layer_id=f"layer-{level}", k=k))
+        elif isinstance(result, BaseException):
+            # cascade exhausted (502) / unexpected: remember it for the all-fail case.
+            cascade_error = result
 
-    # A model that ignored the schema on EVERY run is an upstream failure -> 502.
+    # Every run failed. Surface the cascade error (quota/timeout) if that was the
+    # cause; otherwise it was a pure schema failure.
     if not candidates:
+        if isinstance(cascade_error, HTTPException):
+            raise cascade_error
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=(

@@ -78,7 +78,7 @@ def get_embeddings_enabled() -> bool:
 
 def get_embedding_model() -> str:
     """Embedding model id for semantic dedup. Override with EMBEDDING_MODEL."""
-    return os.getenv("EMBEDDING_MODEL", "").strip() or "text-embedding-004"
+    return os.getenv("EMBEDDING_MODEL", "").strip() or "gemini-embedding-001"
 
 
 def get_allowed_origins() -> list[str]:
