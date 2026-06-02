@@ -538,3 +538,310 @@ button:disabled .spinner {
   font-size: 1.1rem;
   line-height: 1;
 }
+
+/* ---------- Modals (config popup / AI quota) ---------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(2px);
+  animation: toast-in 0.15s ease-out;
+}
+
+.modal {
+  width: min(560px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.35);
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.modal-close {
+  background: transparent;
+  border: none;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: #64748b;
+}
+
+.modal-body {
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.modal-intro {
+  margin: 0;
+  color: #475569;
+  font-size: 0.9rem;
+}
+
+.modal-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.modal-actions button,
+.quota-use {
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 8px;
+  padding: 0.45rem 1rem;
+  font-weight: 600;
+}
+
+.modal-actions .primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.modal-actions .ghost {
+  color: #475569;
+}
+
+/* Config popup: auto / manual cards */
+.config-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.config-option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: "radio title" "radio desc";
+  align-items: center;
+  gap: 0 0.5rem;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 0.75rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.config-option input {
+  grid-area: radio;
+}
+
+.config-option-title {
+  grid-area: title;
+  font-weight: 600;
+}
+
+.config-option-desc {
+  grid-area: desc;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.config-option.selected {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.config-manual {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.config-layers-count {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.config-layers-count input {
+  width: 4rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.pyramid-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.pyramid-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.pyramid-row-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.pyramid-row-tag {
+  font-weight: 400;
+  color: #94a3b8;
+}
+
+.pyramid-row input {
+  width: 4rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  text-align: center;
+}
+
+.pyramid-apex {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #2563eb;
+}
+
+/* Home AI-quota button */
+.ai-quota-btn {
+  border: 1px solid #c7d2fe;
+  background: #eef2ff;
+  color: #3730a3;
+  border-radius: 6px;
+  padding: 0.35rem 0.75rem;
+  font-weight: 600;
+}
+
+.ai-quota-btn:hover {
+  background: #e0e7ff;
+}
+
+/* AI quota manager */
+.quota-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.quota-card {
+  border: 1.5px solid var(--border);
+  border-left-width: 5px;
+  border-radius: 10px;
+  padding: 0.75rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.quota-card.active {
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.quota-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.quota-model-name {
+  font-weight: 700;
+}
+
+.quota-active-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+}
+
+.quota-usage {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 0.85rem;
+}
+
+.quota-usage-label {
+  color: #64748b;
+}
+
+.quota-usage-value {
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.quota-bar {
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.2);
+  overflow: hidden;
+}
+
+.quota-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.quota-traits {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.quota-traits dt {
+  font-weight: 600;
+  color: #475569;
+}
+
+.quota-traits dd {
+  margin: 0 0 0.4rem;
+  color: #334155;
+}
+
+.quota-use {
+  align-self: flex-start;
+}
+
+.quota-use:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

@@ -66,7 +66,33 @@ export type UIKey =
   | "a11y.close"
   | "lang.es"
   | "lang.en"
-  | "lang.zh";
+  | "lang.zh"
+  | "config.title"
+  | "config.intro"
+  | "config.auto"
+  | "config.autoDesc"
+  | "config.manual"
+  | "config.manualDesc"
+  | "config.layersCount"
+  | "config.layer"
+  | "config.base"
+  | "config.apex"
+  | "config.apexFixed"
+  | "config.pyramidHint"
+  | "config.start"
+  | "config.cancel"
+  | "quota.button"
+  | "quota.open"
+  | "quota.title"
+  | "quota.intro"
+  | "quota.remaining"
+  | "quota.usesLeft"
+  | "quota.strengths"
+  | "quota.weaknesses"
+  | "quota.use"
+  | "quota.active"
+  | "quota.close"
+  | "quota.activeModel";
 
 const ES: Record<UIKey, string> = {
   "nav.home": "Inicio",
@@ -129,6 +155,33 @@ const ES: Record<UIKey, string> = {
   "lang.es": "Español",
   "lang.en": "Inglés",
   "lang.zh": "Mandarín",
+  "config.title": "Configuración del análisis",
+  "config.intro": "¿Cómo configurar el análisis de «{name}»?",
+  "config.auto": "Automática",
+  "config.autoDesc": "Gemini decide la estructura (mínimo 3 capas).",
+  "config.manual": "Manual",
+  "config.manualDesc": "Define cuántos conceptos tendrá cada capa.",
+  "config.layersCount": "Número de capas",
+  "config.layer": "Capa {n}",
+  "config.base": "base",
+  "config.apex": "cúspide",
+  "config.apexFixed": "1 concepto (fijo)",
+  "config.pyramidHint":
+    "Cada capa superior tiene menos conceptos; la cúspide siempre converge en 1.",
+  "config.start": "Analizar",
+  "config.cancel": "Cancelar",
+  "quota.button": "IA",
+  "quota.open": "Cuotas de modelos de IA",
+  "quota.title": "Modelos de IA y cuota diaria",
+  "quota.intro": "Usos restantes hoy por modelo (se reinician cada día).",
+  "quota.remaining": "Usos restantes",
+  "quota.usesLeft": "{left} / {total} hoy",
+  "quota.strengths": "Fortalezas",
+  "quota.weaknesses": "Debilidades",
+  "quota.use": "Usar este modelo",
+  "quota.active": "Activo",
+  "quota.close": "Cerrar",
+  "quota.activeModel": "Modelo activo: {name}",
 };
 
 const EN: Record<UIKey, string> = {
@@ -192,6 +245,33 @@ const EN: Record<UIKey, string> = {
   "lang.es": "Spanish",
   "lang.en": "English",
   "lang.zh": "Mandarin",
+  "config.title": "Analysis configuration",
+  "config.intro": "How should “{name}” be analyzed?",
+  "config.auto": "Automatic",
+  "config.autoDesc": "Gemini decides the structure (minimum 3 layers).",
+  "config.manual": "Manual",
+  "config.manualDesc": "Set how many concepts each layer keeps.",
+  "config.layersCount": "Number of layers",
+  "config.layer": "Layer {n}",
+  "config.base": "base",
+  "config.apex": "apex",
+  "config.apexFixed": "1 concept (fixed)",
+  "config.pyramidHint":
+    "Each upper layer keeps fewer concepts; the apex always converges to 1.",
+  "config.start": "Analyze",
+  "config.cancel": "Cancel",
+  "quota.button": "AI",
+  "quota.open": "AI model quotas",
+  "quota.title": "AI models & daily quota",
+  "quota.intro": "Uses remaining today per model (they reset every day).",
+  "quota.remaining": "Uses remaining",
+  "quota.usesLeft": "{left} / {total} today",
+  "quota.strengths": "Strengths",
+  "quota.weaknesses": "Weaknesses",
+  "quota.use": "Use this model",
+  "quota.active": "Active",
+  "quota.close": "Close",
+  "quota.activeModel": "Active model: {name}",
 };
 
 const ZH: Record<UIKey, string> = {
@@ -254,6 +334,32 @@ const ZH: Record<UIKey, string> = {
   "lang.es": "西班牙語",
   "lang.en": "英語",
   "lang.zh": "繁體中文",
+  "config.title": "分析設定",
+  "config.intro": "要如何分析「{name}」？",
+  "config.auto": "自動",
+  "config.autoDesc": "由 Gemini 決定結構（至少 3 層）。",
+  "config.manual": "手動",
+  "config.manualDesc": "設定每一層保留多少個概念。",
+  "config.layersCount": "層數",
+  "config.layer": "第 {n} 層",
+  "config.base": "底層",
+  "config.apex": "頂層",
+  "config.apexFixed": "1 個概念（固定）",
+  "config.pyramidHint": "越上層概念越少；頂層始終收斂為 1 個概念。",
+  "config.start": "開始分析",
+  "config.cancel": "取消",
+  "quota.button": "AI",
+  "quota.open": "AI 模型配額",
+  "quota.title": "AI 模型與每日配額",
+  "quota.intro": "各模型今日剩餘的使用次數（每天重置）。",
+  "quota.remaining": "剩餘次數",
+  "quota.usesLeft": "{left} / {total} 今日",
+  "quota.strengths": "優勢",
+  "quota.weaknesses": "劣勢",
+  "quota.use": "使用此模型",
+  "quota.active": "使用中",
+  "quota.close": "關閉",
+  "quota.activeModel": "使用中的模型：{name}",
 };
 
 const TRANSLATIONS: Record<Language, Record<UIKey, string>> = {

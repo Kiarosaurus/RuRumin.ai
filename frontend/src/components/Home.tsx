@@ -1,25 +1,33 @@
 /**
  * Home view — visual repository of processed/active documents.
  *
- * Includes a language selector (es/en/zh) that drives both the UI text and the
- * analysis language. On import: extract .docx text -> POST (with language) ->
- * build a DocumentRecord -> hand it up. Blocking loader + disabled control
+ * Includes a language selector (es/en/zh) and an AI quota manager. Importing or
+ * re-analyzing a document no longer uses an inline layers field: it opens the
+ * analysis-configuration popup (Automatic vs Manual pyramid) and runs with the
+ * chosen structure and the active model. Blocking loader + disabled controls
  * prevent duplicate submissions; errors surface as localized toasts.
  */
 
 import { useRef, useState } from "react";
 import type { AnalysisRecord, DocumentRecord } from "../data/mockData";
+import { MODELS } from "../data/models";
 import { analyzeTranscriptStream, ApiError } from "../services/apiClient";
 import {
   DocxExtractionError,
   extractDocxText,
 } from "../services/docxExtractor";
-import type { Language } from "../types";
+import type { QuotaState } from "../services/quota";
+import type { AnalysisOptions, Language } from "../types";
 import { LANGUAGE_LABELS, LANGUAGE_OPTIONS, tr, type UIKey } from "../utils/i18n";
+import {
+  AnalysisConfigModal,
+  type AnalysisConfigResult,
+} from "./AnalysisConfigModal";
 import {
   AnalysisProgressOverlay,
   useAnalysisProgress,
 } from "./AnalysisProgress";
+import { ModelQuotaModal } from "./ModelQuotaModal";
 import { Spinner } from "./Spinner";
 import type { ToastState } from "./Toast";
 
@@ -27,17 +35,20 @@ interface Props {
   documents: DocumentRecord[];
   busyIds: string[];
   language: Language;
+  /** Active Gemini model id (drives AnalysisOptions.model + quota debit). */
+  selectedModel: string;
+  /** Local daily-quota state, for the AI manager display. */
+  quota: QuotaState;
   onLanguageChange: (language: Language) => void;
+  onSelectModel: (modelId: string) => void;
+  /** Debit `requests` from `model` after a finished analysis. */
+  onConsumeQuota: (model: string, requests: number) => void;
   onOpen: (doc: DocumentRecord) => void;
   onAnalyzed: (doc: DocumentRecord) => void;
   onDelete: (id: string) => void;
-  onReanalyze: (doc: DocumentRecord, maxLayers: number) => void;
+  onReanalyze: (doc: DocumentRecord, options: AnalysisConfigResult) => void;
   notify: (toast: ToastState) => void;
 }
-
-/** Smallest tree the backend accepts. Mirrors AnalysisOptions.max_layers ge=2. */
-const MIN_LAYERS = 2;
-const DEFAULT_LAYERS = 5;
 
 const STATUS_KEY: Record<DocumentRecord["status"], UIKey> = {
   processed: "status.processed",
@@ -45,11 +56,20 @@ const STATUS_KEY: Record<DocumentRecord["status"], UIKey> = {
   failed: "status.failed",
 };
 
+/** Which action is waiting for the configuration popup to be confirmed. */
+type PendingAction =
+  | { type: "import"; file: File }
+  | { type: "reanalyze"; doc: DocumentRecord };
+
 export function Home({
   documents,
   busyIds,
   language,
+  selectedModel,
+  quota,
   onLanguageChange,
+  onSelectModel,
+  onConsumeQuota,
   onOpen,
   onAnalyzed,
   onDelete,
@@ -58,43 +78,48 @@ export function Home({
 }: Props) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [isAnalyzing, setAnalyzing] = useState(false);
-  /** Layer depth the user wants for the next run (import or new analysis). */
-  const [layers, setLayers] = useState(DEFAULT_LAYERS);
+  const [pending, setPending] = useState<PendingAction | null>(null);
+  const [quotaOpen, setQuotaOpen] = useState(false);
   const { state: progress, onProgress, reset: resetProgress } =
     useAnalysisProgress();
 
-  /** Clamp a layers value to the backend-valid range (>= 2, integer). */
-  const clampLayers = (raw: number) =>
-    Number.isFinite(raw) ? Math.max(MIN_LAYERS, Math.floor(raw)) : DEFAULT_LAYERS;
-  const commitLayers = (raw: number) => setLayers(clampLayers(raw));
-  /** The value actually sent to the backend (input may hold a transient NaN). */
-  const safeLayers = clampLayers(layers);
+  const activeModelLabel =
+    MODELS.find((m) => m.id === selectedModel)?.label ?? selectedModel;
 
-  async function handleFile(file: File | undefined) {
+  /** Selecting a .docx opens the config popup; analysis runs once confirmed. */
+  function pickFile(file: File | undefined) {
     if (fileInput.current) fileInput.current.value = "";
     if (!file || isAnalyzing) return;
+    setPending({ type: "import", file });
+  }
 
+  /** Run the import after the popup resolves the analysis structure. */
+  async function runImport(file: File, config: AnalysisConfigResult) {
     resetProgress();
     setAnalyzing(true);
     try {
       // 1. Extract clean text from the .docx (rejects non-Word files).
       const extracted = await extractDocxText(file, language);
 
-      // 2. Stream the analysis so the overlay shows live progress.
+      // 2. Stream the analysis with the chosen structure + active model.
+      const options: Partial<AnalysisOptions> = {
+        max_layers: config.max_layers,
+        model: selectedModel,
+        ...(config.k_per_layer ? { k_per_layer: config.k_per_layer } : {}),
+      };
       const analysis = await analyzeTranscriptStream(
         extracted.text,
         language,
         onProgress,
-        { max_layers: safeLayers },
+        options,
         extracted.filename,
       );
 
-      // 3. Build the repository record from the response. The document starts
-      //    with this single analysis run; more can be appended later.
+      // 3. Build the repository record from the response.
       const record: AnalysisRecord = {
         id: analysis.request_id,
         timestamp: analysis.metadata.created_at,
-        max_layers: safeLayers,
+        max_layers: config.max_layers,
         result: analysis,
       };
       const doc: DocumentRecord = {
@@ -112,6 +137,8 @@ export function Home({
         message: tr(language, "toast.analyzed", { name: extracted.filename }),
       });
       onAnalyzed(doc);
+      // 4. Debit the simulated daily quota for the model that ran.
+      onConsumeQuota(selectedModel, analysis.metadata.total_runs);
     } catch (err) {
       if (err instanceof DocxExtractionError) {
         // Message is already localized by the extractor.
@@ -133,10 +160,51 @@ export function Home({
     }
   }
 
+  /** Resolve the configuration popup: dispatch the pending import/reanalyze. */
+  function confirmConfig(config: AnalysisConfigResult) {
+    const action = pending;
+    setPending(null);
+    if (!action) return;
+    if (action.type === "import") {
+      void runImport(action.file, config);
+    } else {
+      onReanalyze(action.doc, config);
+    }
+  }
+
+  const pendingName =
+    pending?.type === "import"
+      ? pending.file.name
+      : pending?.type === "reanalyze"
+        ? pending.doc.filename
+        : "";
+
   return (
     <div className="view">
       {isAnalyzing && (
         <AnalysisProgressOverlay state={progress} language={language} />
+      )}
+
+      {pending && (
+        <AnalysisConfigModal
+          name={pendingName}
+          language={language}
+          onCancel={() => setPending(null)}
+          onConfirm={confirmConfig}
+        />
+      )}
+
+      {quotaOpen && (
+        <ModelQuotaModal
+          language={language}
+          quota={quota}
+          activeModel={selectedModel}
+          onSelect={(id) => {
+            onSelectModel(id);
+            setQuotaOpen(false);
+          }}
+          onClose={() => setQuotaOpen(false)}
+        />
       )}
 
       <header className="view-header">
@@ -156,25 +224,20 @@ export function Home({
               ))}
             </select>
           </label>
-          <label className="layers-select">
-            {tr(language, "home.layers")}
-            <input
-              type="number"
-              min={MIN_LAYERS}
-              step={1}
-              value={layers}
-              disabled={isAnalyzing}
-              onChange={(e) => setLayers(e.target.valueAsNumber)}
-              onBlur={(e) => commitLayers(e.target.valueAsNumber)}
-            />
-          </label>
+          <button
+            className="ai-quota-btn"
+            onClick={() => setQuotaOpen(true)}
+            title={tr(language, "quota.activeModel", { name: activeModelLabel })}
+          >
+            <span aria-hidden="true">✨</span> {tr(language, "quota.button")}
+          </button>
           <input
             ref={fileInput}
             type="file"
             accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             style={{ display: "none" }}
             disabled={isAnalyzing}
-            onChange={(e) => handleFile(e.target.files?.[0])}
+            onChange={(e) => pickFile(e.target.files?.[0])}
           />
           <button onClick={() => fileInput.current?.click()} disabled={isAnalyzing}>
             {isAnalyzing ? (
@@ -213,8 +276,8 @@ export function Home({
               <button
                 className="ghost"
                 disabled={!doc.transcript_text.trim() || busyIds.includes(doc.id)}
-                onClick={() => onReanalyze(doc, safeLayers)}
-                title={tr(language, "action.newAnalysisHint", { layers: safeLayers })}
+                onClick={() => setPending({ type: "reanalyze", doc })}
+                title={tr(language, "action.reanalyze")}
               >
                 {busyIds.includes(doc.id) ? <Spinner label={tr(language, "a11y.loading")} /> : tr(language, "action.reanalyze")}
               </button>

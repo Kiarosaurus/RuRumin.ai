@@ -26,7 +26,10 @@ import {
 } from "./data/mockData";
 import { analyzeTranscriptStream, ApiError } from "./services/apiClient";
 import { loadDocuments, saveDocuments } from "./services/storage";
-import type { Language } from "./types";
+import { consumeQuota, loadQuota, type QuotaState } from "./services/quota";
+import { DEFAULT_MODEL } from "./data/models";
+import type { AnalysisConfigResult } from "./components/AnalysisConfigModal";
+import type { AnalysisOptions, Language } from "./types";
 import { tr } from "./utils/i18n";
 
 type View = "home" | "summary" | "details" | "tree";
@@ -39,6 +42,10 @@ export default function App() {
   const [activeAnalysisId, setActiveAnalysisId] = useState<string | null>(null);
   const [busyIds, setBusyIds] = useState<string[]>([]);
   const [language, setLanguage] = useState<Language>("es");
+  /** Active Gemini model id; sent with each analysis and debited from quota. */
+  const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL);
+  /** Local per-model daily quota (IndexedDB-backed), shown in the AI manager. */
+  const [quota, setQuota] = useState<QuotaState>({ date: "", used: {} });
   const [toast, setToast] = useState<ToastState | null>(null);
   /** Becomes true once IndexedDB has been read, gating the save-back effect. */
   const [hydrated, setHydrated] = useState(false);
@@ -72,11 +79,31 @@ export default function App() {
     void saveDocuments(documents);
   }, [documents, hydrated]);
 
+  // Load today's local quota usage on mount (resets automatically per day).
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const state = await loadQuota();
+      if (!cancelled) setQuota(state);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const notify = useCallback((next: ToastState) => {
     window.clearTimeout(toastTimer.current);
     setToast(next);
     const ttl = next.kind === "error" ? 6000 : 3500;
     toastTimer.current = window.setTimeout(() => setToast(null), ttl);
+  }, []);
+
+  /** Debit `requests` from `model`'s daily budget and refresh the UI state. */
+  const handleConsumeQuota = useCallback((model: string, requests: number) => {
+    void (async () => {
+      const state = await consumeQuota(model, requests);
+      setQuota(state);
+    })();
   }, []);
 
   const openDoc = useCallback((doc: DocumentRecord) => {
@@ -116,11 +143,11 @@ export default function App() {
 
   /**
    * Run a NEW analysis over an existing document and append it as another
-   * `AnalysisRecord` (the document keeps its previous runs). `maxLayers` is the
-   * depth the user picked for this run.
+   * `AnalysisRecord` (the document keeps its previous runs). `config` is the
+   * structure the user picked in the configuration popup (auto or manual pyramid).
    */
   const handleReanalyze = useCallback(
-    async (doc: DocumentRecord, maxLayers: number) => {
+    async (doc: DocumentRecord, config: AnalysisConfigResult) => {
       if (!doc.transcript_text.trim()) {
         notify({ kind: "error", message: tr(doc.language, "toast.noText") });
         return;
@@ -130,17 +157,22 @@ export default function App() {
       setBusyIds((prev) => [...prev, doc.id]);
       resetProgress();
       try {
+        const options: Partial<AnalysisOptions> = {
+          max_layers: config.max_layers,
+          model: selectedModel,
+          ...(config.k_per_layer ? { k_per_layer: config.k_per_layer } : {}),
+        };
         const result = await analyzeTranscriptStream(
           doc.transcript_text,
           doc.language,
           onProgress,
-          { max_layers: maxLayers },
+          options,
           doc.filename,
         );
         const record: AnalysisRecord = {
           id: result.request_id,
           timestamp: result.metadata.created_at,
-          max_layers: maxLayers,
+          max_layers: config.max_layers,
           result,
         };
         const updated: DocumentRecord = {
@@ -157,6 +189,7 @@ export default function App() {
           kind: "success",
           message: tr(doc.language, "toast.reanalyzed", { name: doc.filename }),
         });
+        handleConsumeQuota(selectedModel, result.metadata.total_runs);
       } catch (err) {
         if (err instanceof ApiError) {
           const prefix =
@@ -174,7 +207,7 @@ export default function App() {
         setBusyIds((prev) => prev.filter((id) => id !== doc.id));
       }
     },
-    [active, busyIds, notify, onProgress, resetProgress],
+    [active, busyIds, notify, onProgress, resetProgress, selectedModel, handleConsumeQuota],
   );
 
   /** The analysis run currently displayed for the active document. */
@@ -245,7 +278,11 @@ export default function App() {
             documents={documents}
             busyIds={busyIds}
             language={language}
+            selectedModel={selectedModel}
+            quota={quota}
             onLanguageChange={setLanguage}
+            onSelectModel={setSelectedModel}
+            onConsumeQuota={handleConsumeQuota}
             onOpen={openDoc}
             onAnalyzed={handleAnalyzed}
             onDelete={handleDelete}
