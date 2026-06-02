@@ -15,17 +15,18 @@ RuRumin.ai/
 │  │  ├─ main.py            App FastAPI + CORS + manejo de errores
 │  │  ├─ prompts.py         Prompt de análisis por layer (Gemini)
 │  │  ├─ llm_schema.py      Validación del JSON crudo del modelo
-│  │  ├─ routers/analysis.py  POST /api/analyze-transcript
-│  │  └─ services/          analyzer (orquestación) + mapping (LLM→contrato)
+│  │  ├─ routers/analysis.py  POST /api/analyze-transcript(/stream) + /api/merge-projects/stream
+│  │  └─ services/          analyzer (pirámide) + aggregation + merge (fusión) + mapping
 │  ├─ requirements.txt
 │  ├─ Dockerfile            Imagen para Google Cloud Run (puerto 8080)
 │  └─ .dockerignore
 ├─ frontend/                Cliente Tauri + React + Vite
 │  ├─ src/
 │  │  ├─ types.ts           Interfaces TS (espejo 1:1 de Pydantic)
-│  │  ├─ services/          apiClient + docxExtractor (mammoth, solo .docx)
-│  │  ├─ components/        Home, ReaderSummary, ReaderDetails, TreeView…
-│  │  └─ data/mockData.ts
+│  │  ├─ services/          apiClient + docxExtractor + quota (cuotas locales, IndexedDB)
+│  │  ├─ components/        Home, ReaderSummary (toggle), TreeView, FusionView, modales
+│  │  ├─ utils/             i18n, colors, layers, pyramid (config manual)
+│  │  └─ data/              mockData + models (catálogo de modelos de IA)
 │  ├─ src-tauri/            Proyecto Rust de Tauri (config + íconos)
 │  └─ .env.example          VITE_API_BASE_URL
 └─ .github/workflows/release.yml   CI: instalador Windows (Tauri v2)
@@ -113,7 +114,9 @@ interfaz y el análisis generado comparten un único idioma.
 
 - **UI**: un diccionario ligero (`frontend/src/utils/i18n.ts`) con la función
   `tr(lang, key, vars)` localiza navegación, botones, estados de carga, toasts,
-  errores del extractor de `.docx` y el diagrama del árbol (Modo 3).
+  errores del extractor de `.docx`, el diagrama del árbol, el popup de
+  configuración, el gestor de cuotas de IA, el toggle *Aceptados/Rechazados* y la
+  vista Fusión.
 - **Análisis (LLM)**: `backend/app/prompts.py` arma el prompt en el idioma
   elegido; las justificaciones y nombres de concepto se generan en ese idioma.
 
@@ -131,6 +134,52 @@ directiva inviolable que obliga este comportamiento, de modo que el esquema
 Pydantic (`app/llm_schema.py`) nunca recibe una clave traducida y la validación
 no puede romperse por idioma. Esto desacopla el formato del modelo del formato
 de presentación y mantiene un único esquema estable para todos los idiomas.
+
+## Funcionalidades clave
+
+### Síntesis Piramidal
+
+El análisis se organiza como una **pirámide de conceptos**: la capa base (nivel 0)
+es la más ancha y **cada capa superior conserva estrictamente menos conceptos** que
+la inferior, hasta converger en la **cúspide** en **un único concepto central** que
+resume toda la entrevista.
+
+- **Automático:** el backend deriva los anchos a partir de `k_top` con
+  `pyramidal_k_sequence` (p. ej. `[5, 4, 3, 2, 1]`), garantizando el decrecimiento
+  estricto y la cúspide en 1.
+- **Manual:** desde el popup de configuración eliges los conceptos por capa; la UI
+  fuerza la regla piramidal (decreciente, última capa fija en 1) y los envía como
+  `options.k_per_layer`, validado por Pydantic en el backend.
+
+Además, el prompt exige la **máxima densidad de `frases_origen`** por concepto
+(exhaustividad sobre escasez): cada concepto queda respaldado por todas las citas
+posibles del texto.
+
+### Cuotas Locales de IA
+
+El nivel gratuito de Gemini limita las peticiones **por día (RPD)** por modelo. Como
+esta app es el único consumidor de esa cuota, la **simulamos en local** (IndexedDB,
+`frontend/src/services/quota.ts`):
+
+- El **gestor de IA** (botón ✨ junto a *Importar*) lista los 4 modelos de la
+  cascada con sus **fortalezas/debilidades** y los **usos restantes hoy**.
+- Cada análisis descuenta `metadata.total_runs` peticiones del **modelo activo**; el
+  contador se **reinicia automáticamente** al cambiar el día.
+- El modelo elegido viaja como `options.model` en la petición de análisis.
+
+### Fusión Multi-Proyecto
+
+Permite **combinar varios proyectos** para encontrar sus **macro-temáticas comunes**:
+
+1. En *Home*, marca las casillas de **2 o más** documentos y pulsa **Fusionar** (con
+   menos de 2 seleccionados, un *toast* lo advierte).
+2. Elige la estructura en el popup de configuración (igual que un análisis normal).
+3. El backend reúne los **conceptos aceptados** de cada proyecto en un corpus y lo
+   re-analiza con **10 pasadas por capa** (`POST /api/merge-projects/stream`) para
+   que emerjan los temas compartidos.
+4. El resultado se guarda como un **nuevo proyecto etiquetado «Fusión»** y se abre en
+   la **vista Fusión**: pantalla dividida 50/50 con el **DAG** del merge a la
+   izquierda y el **Resumen** (con el toggle *Aceptados/Rechazados*) a la derecha.
 
 ## Docker (backend → Cloud Run)
 
