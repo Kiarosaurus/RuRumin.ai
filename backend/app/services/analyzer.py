@@ -83,6 +83,34 @@ def _is_retryable(exc: genai_errors.APIError) -> bool:
     return getattr(exc, "code", None) in RETRYABLE_STATUS
 
 
+def pyramidal_k_sequence(max_layers: int, base_k: int) -> list[int]:
+    """
+    Per-layer winner counts for the pyramidal synthesis.
+
+    The base (level 0) is the widest layer; every deeper layer keeps STRICTLY
+    fewer winners than the layer below it (at least one less), and the apex
+    (level ``max_layers - 1``) converges to exactly 1 central concept.
+
+    ``base_k`` is bumped up to at least ``max_layers`` when needed so there is
+    room to drop by >=1 on every step and still land on 1 at the apex. The
+    returned list has length ``max_layers``, is strictly decreasing, and ends in
+    1, e.g. ``pyramidal_k_sequence(5, 5) == [5, 4, 3, 2, 1]``.
+    """
+    if max_layers <= 1:
+        return [1]
+    base = max(base_k, max_layers)
+    steps = max_layers - 1
+    span = base - 1
+    seq = [round(base - span * level / steps) for level in range(max_layers)]
+    # Defensive: rounding ties could break strict monotonicity; force it and
+    # pin the apex to exactly 1.
+    for i in range(1, max_layers):
+        if seq[i] >= seq[i - 1]:
+            seq[i] = seq[i - 1] - 1
+    seq[-1] = 1
+    return [max(1, v) for v in seq]
+
+
 async def run_thematic_analysis(
     request: AnalysisRequest,
     emit: Emit = _noop,
@@ -97,12 +125,18 @@ async def run_thematic_analysis(
     progress to the UI. Defaults to a no-op for the plain (non-streaming) path.
     """
     max_layers = request.options.max_layers
+    # Resolve the pyramid widths once: an explicit manual override if the client
+    # sent one, otherwise the auto strictly-decreasing sequence derived from k_top.
+    k_per_layer = request.options.k_per_layer or pyramidal_k_sequence(
+        max_layers, request.options.k_top
+    )
     await emit({"type": "progress", "phase": "starting", "max_layers": max_layers})
 
     root_layer = await _analyze_layer(
         request=request,
         text_chunk=request.transcript_text,
         level=0,
+        k_per_layer=k_per_layer,
         emit=emit,
     )
 
@@ -126,16 +160,19 @@ async def _analyze_layer(
     request: AnalysisRequest,
     text_chunk: str,
     level: int,
+    k_per_layer: list[int],
     emit: Emit = _noop,
 ) -> AnalysisLayer:
     """
     Run one layer (prompt -> model -> validate -> map) and recurse on winners.
+
+    ``k_per_layer`` is the precomputed pyramid: ``k_per_layer[level]`` winners are
+    kept at this depth, strictly fewer than the layer below, converging to 1 at
+    the apex (see ``pyramidal_k_sequence``).
     """
     max_layers = request.options.max_layers
-    # The deepest layer converges to ONE general concept (k=1); the rest keep
-    # the configured k-top width.
-    is_final_layer = level >= max_layers - 1
-    k = 1 if is_final_layer else request.options.k_top
+    # Pyramidal width for this layer (apex converges to 1).
+    k = k_per_layer[level] if level < len(k_per_layer) else 1
     runs = RUNS_PER_LAYER
 
     await emit(
@@ -234,7 +271,11 @@ async def _analyze_layer(
         next_chunk = "\n".join(c.grouping_justification for c in layer.winning_concepts)
         layer.sub_layers = [
             await _analyze_layer(
-                request=request, text_chunk=next_chunk, level=level + 1, emit=emit
+                request=request,
+                text_chunk=next_chunk,
+                level=level + 1,
+                k_per_layer=k_per_layer,
+                emit=emit,
             )
         ]
 

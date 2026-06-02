@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # Supported analysis languages. The document, the UI and the generated analysis
 # all share one language (no cross translation).
@@ -172,6 +172,41 @@ class AnalysisOptions(BaseModel):
         default="gemini-3.1-flash-lite",
         description="Identifier of the Gemini model to invoke.",
     )
+    k_per_layer: Optional[List[int]] = Field(
+        default=None,
+        description=(
+            "Explicit per-layer winner counts for the pyramidal synthesis "
+            "(manual mode). When provided it overrides the auto sequence derived "
+            "from k_top and MUST have length == max_layers, be strictly "
+            "decreasing, and end in 1 (the apex converges to a single concept). "
+            "Index 0 is the widest base layer."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _validate_pyramid(self) -> "AnalysisOptions":
+        """Enforce the pyramidal invariant when an explicit width list is given."""
+        widths = self.k_per_layer
+        if widths is None:
+            return self
+        if len(widths) != self.max_layers:
+            raise ValueError(
+                f"k_per_layer must have exactly max_layers ({self.max_layers}) "
+                f"entries, got {len(widths)}."
+            )
+        if any(w < 1 for w in widths):
+            raise ValueError("k_per_layer values must all be >= 1.")
+        if widths[-1] != 1:
+            raise ValueError(
+                "k_per_layer must end in 1 (the apex layer converges to a single "
+                "central concept)."
+            )
+        if any(widths[i] <= widths[i + 1] for i in range(len(widths) - 1)):
+            raise ValueError(
+                "k_per_layer must be strictly decreasing (each upper layer keeps "
+                "fewer concepts than the layer below it)."
+            )
+        return self
 
 
 class AnalysisRequest(BaseModel):

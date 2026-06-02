@@ -62,6 +62,11 @@ fuerte) y desarrolla en "justificacion_agrupacion" una explicación EXTENSA, \
 analítica y profunda de AL MENOS 3 a 4 párrafos bien desarrollados: por qué se \
 agruparon esas ideas, qué patrones, tensiones y matices revelan, su relevancia \
 para el tema y cómo se conectan con el resto de la entrevista.
+- Densidad de evidencia (frases_origen): extrae la MAYOR cantidad posible de \
+frases_origen textuales por cada concepto — muchas, no pocas. Incluye TODA \
+frase, oración o fragmento del texto que sustente el concepto, aunque el aporte \
+sea parcial o algo redundante; prioriza SIEMPRE la exhaustividad sobre la \
+escasez y nunca te limites a 1 o 2 citas cuando el texto ofrece más.
 - Superposición (Overlap): una misma frase u oración (frase_origen) PUEDE y \
 DEBE pertenecer a múltiples conceptos_ganadores si su significado aporta a más \
 de un tema. Se permite la superposición total o parcial de frases entre \
@@ -91,6 +96,11 @@ develop in "justificacion_agrupacion" an EXTENSIVE, analytical and deep \
 explanation of AT LEAST 3 to 4 well-developed paragraphs: why those ideas were \
 grouped, what patterns, tensions and nuances they reveal, their relevance to \
 the theme and how they connect to the rest of the interview.
+- Evidence density (frases_origen): extract as MANY verbatim frases_origen as \
+possible per concept — many, not few. Include EVERY phrase, sentence or \
+fragment of the text that supports the concept, even partial or somewhat \
+redundant ones; ALWAYS prioritize exhaustiveness over scarcity and never settle \
+for 1 or 2 quotes when the text offers more.
 - Overlap: the same sentence or phrase (frase_origen) CAN and MUST belong to \
 multiple conceptos_ganadores when its meaning contributes to more than one \
 theme. Total or partial overlap of phrases across concepts is allowed; do not \
@@ -115,6 +125,10 @@ same thing.""",
 一個 0.0 到 1.0 之間的浮點數（越大越強），並在 "justificacion_agrupacion" 中\
 撰寫至少 3 至 4 個充分展開段落的詳盡、深入且具分析性的說明：為何如此歸納、揭示\
 了哪些模式、張力與細微差異、對主題的重要性，以及與整場訪談其餘部分的關聯。
+- 證據密度（frases_origen）：為每個概念盡可能提取最多的原文 frases_origen——\
+要多，不要少。納入文本中所有支持該概念的語句、句子或片段，即使貢獻只是部分或\
+略有重複也要包含；務必優先追求詳盡而非簡略，當文本能提供更多引用時，切勿只給 \
+1 至 2 句。
 - 重疊（Overlap）：同一個句子或語句（frase_origen）只要其含義對多個主題有貢獻，\
 就可以且應該屬於多個 conceptos_ganadores。允許概念之間的語句完全或部分重疊；\
 不要強迫每個語句只屬於單一概念。

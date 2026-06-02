@@ -77,10 +77,16 @@ export interface AnalysisLayer {
 export interface AnalysisOptions {
   /** Maximum recursion depth of the analysis tree. */
   max_layers: number;
-  /** Number of winning concepts to keep per layer. */
+  /** Number of winning concepts to keep per layer (base width of the pyramid). */
   k_top: number;
   /** Identifier of the Gemini model to invoke. */
   model: string;
+  /**
+   * Explicit per-layer winner counts for the pyramidal synthesis (manual mode).
+   * When set, overrides the auto sequence: length must equal `max_layers`, be
+   * strictly decreasing, and end in 1. Index 0 is the widest base layer.
+   */
+  k_per_layer?: number[];
 }
 
 /** Request payload: clean text extracted from the .docx. Mirrors `AnalysisRequest`. */
