@@ -284,6 +284,35 @@ button {
   background: var(--panel);
 }
 
+/* Accepted / Rejected segmented toggle in the reader side panel. */
+.view-toggle {
+  display: flex;
+  margin-bottom: 1rem;
+  background: #eef2f7;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px;
+}
+
+.view-toggle button {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: #475569;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.view-toggle button.active {
+  background: #fff;
+  color: #0f172a;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.15);
+}
+
 .layer-buttons {
   display: flex;
   flex-wrap: wrap;

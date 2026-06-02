@@ -11,7 +11,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import { Home } from "./components/Home";
-import { ReaderDetails } from "./components/ReaderDetails";
 import { ReaderSummary } from "./components/ReaderSummary";
 import { Toast, type ToastState } from "./components/Toast";
 import { TreeView } from "./components/TreeView";
@@ -32,7 +31,7 @@ import type { AnalysisConfigResult } from "./components/AnalysisConfigModal";
 import type { AnalysisOptions, Language } from "./types";
 import { tr } from "./utils/i18n";
 
-type View = "home" | "summary" | "details" | "tree";
+type View = "home" | "summary" | "tree";
 
 export default function App() {
   const [view, setView] = useState<View>("home");
@@ -220,7 +219,7 @@ export default function App() {
   }, [active, activeAnalysisId]);
 
   const hasAnalysis = activeAnalysis != null;
-  const isReader = view === "summary" || view === "details" || view === "tree";
+  const isReader = view === "summary" || view === "tree";
 
   return (
     <div className="app">
@@ -235,13 +234,6 @@ export default function App() {
           onClick={() => setView("summary")}
         >
           {tr(language, "nav.summary")}
-        </button>
-        <button
-          className={view === "details" ? "active" : ""}
-          disabled={!hasAnalysis}
-          onClick={() => setView("details")}
-        >
-          {tr(language, "nav.details")}
         </button>
         <button
           className={view === "tree" ? "active" : ""}
@@ -292,13 +284,6 @@ export default function App() {
         )}
         {view === "summary" && activeAnalysis && active && (
           <ReaderSummary
-            transcriptText={active.transcript_text}
-            analysis={activeAnalysis.result}
-            language={language}
-          />
-        )}
-        {view === "details" && activeAnalysis && active && (
-          <ReaderDetails
             transcriptText={active.transcript_text}
             analysis={activeAnalysis.result}
             language={language}

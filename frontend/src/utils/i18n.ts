@@ -34,6 +34,8 @@ export type UIKey =
   | "reader.winners"
   | "reader.discards"
   | "reader.noDiscards"
+  | "reader.accepted"
+  | "reader.rejected"
   | "reader.ktop"
   | "reader.ideaCounter"
   | "tree.empty"
@@ -119,6 +121,8 @@ const ES: Record<UIKey, string> = {
   "reader.analysisOption": "Análisis {n} ({layers} Layers)",
   "reader.winners": "Conceptos ganadores",
   "reader.discards": "Análisis de descartes",
+  "reader.accepted": "Aceptados",
+  "reader.rejected": "Rechazados",
   "reader.noDiscards": "Sin descartes en este layer.",
   "reader.ktop": "k-top",
   "reader.ideaCounter": "Idea {current} / {total}",
@@ -209,6 +213,8 @@ const EN: Record<UIKey, string> = {
   "reader.analysisOption": "Analysis {n} ({layers} Layers)",
   "reader.winners": "Winning concepts",
   "reader.discards": "Discard analysis",
+  "reader.accepted": "Accepted",
+  "reader.rejected": "Rejected",
   "reader.noDiscards": "No discards in this layer.",
   "reader.ktop": "k-top",
   "reader.ideaCounter": "Idea {current} / {total}",
@@ -299,6 +305,8 @@ const ZH: Record<UIKey, string> = {
   "reader.analysisOption": "分析 {n}（{layers} 層）",
   "reader.winners": "勝出概念",
   "reader.discards": "捨棄分析",
+  "reader.accepted": "已接受",
+  "reader.rejected": "已拒絕",
   "reader.noDiscards": "該層沒有被捨棄的概念。",
   "reader.ktop": "k-top",
   "reader.ideaCounter": "想法 {current} / {total}",
