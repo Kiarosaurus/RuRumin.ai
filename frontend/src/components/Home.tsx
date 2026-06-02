@@ -47,6 +47,7 @@ interface Props {
   onAnalyzed: (doc: DocumentRecord) => void;
   onDelete: (id: string) => void;
   onReanalyze: (doc: DocumentRecord, options: AnalysisConfigResult) => void;
+  onMerge: (docs: DocumentRecord[], options: AnalysisConfigResult) => void;
   notify: (toast: ToastState) => void;
 }
 
@@ -59,7 +60,8 @@ const STATUS_KEY: Record<DocumentRecord["status"], UIKey> = {
 /** Which action is waiting for the configuration popup to be confirmed. */
 type PendingAction =
   | { type: "import"; file: File }
-  | { type: "reanalyze"; doc: DocumentRecord };
+  | { type: "reanalyze"; doc: DocumentRecord }
+  | { type: "merge"; docs: DocumentRecord[] };
 
 export function Home({
   documents,
@@ -74,12 +76,15 @@ export function Home({
   onAnalyzed,
   onDelete,
   onReanalyze,
+  onMerge,
   notify,
 }: Props) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [isAnalyzing, setAnalyzing] = useState(false);
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [quotaOpen, setQuotaOpen] = useState(false);
+  /** Ids of documents checked for a fusion (none selected by default). */
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const { state: progress, onProgress, reset: resetProgress } =
     useAnalysisProgress();
 
@@ -160,16 +165,39 @@ export function Home({
     }
   }
 
-  /** Resolve the configuration popup: dispatch the pending import/reanalyze. */
+  /** Resolve the configuration popup: dispatch the pending import/reanalyze/merge. */
   function confirmConfig(config: AnalysisConfigResult) {
     const action = pending;
     setPending(null);
     if (!action) return;
     if (action.type === "import") {
       void runImport(action.file, config);
-    } else {
+    } else if (action.type === "reanalyze") {
       onReanalyze(action.doc, config);
+    } else {
+      onMerge(action.docs, config);
+      setSelectedIds(new Set());
     }
+  }
+
+  /** Toggle a document's membership in the fusion selection. */
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  /** Start a fusion: needs >= 2 selected, else a toast; valid -> config popup. */
+  function startMerge() {
+    const docs = documents.filter((d) => selectedIds.has(d.id));
+    if (docs.length < 2) {
+      notify({ kind: "error", message: tr(language, "fusion.needTwo") });
+      return;
+    }
+    setPending({ type: "merge", docs });
   }
 
   const pendingName =
@@ -177,7 +205,9 @@ export function Home({
       ? pending.file.name
       : pending?.type === "reanalyze"
         ? pending.doc.filename
-        : "";
+        : pending?.type === "merge"
+          ? tr(language, "fusion.name", { count: pending.docs.length })
+          : "";
 
   return (
     <div className="view">
@@ -248,14 +278,36 @@ export function Home({
               tr(language, "home.import")
             )}
           </button>
+          <button
+            className={`fusion-btn${selectedIds.size >= 2 ? " ready" : ""}`}
+            onClick={startMerge}
+            disabled={isAnalyzing}
+            title={tr(language, "fusion.button")}
+          >
+            {tr(language, "fusion.button")}
+            {selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
+          </button>
         </div>
       </header>
 
       <ul className="doc-list">
         {documents.map((doc) => (
           <li key={doc.id} className={`doc-card status-${doc.status}`}>
+            <input
+              type="checkbox"
+              className="doc-select"
+              aria-label={tr(language, "fusion.select")}
+              checked={selectedIds.has(doc.id)}
+              disabled={doc.analyses.length === 0}
+              onChange={() => toggleSelect(doc.id)}
+            />
             <div className="doc-main">
-              <span className="doc-name">{doc.filename}</span>
+              <span className="doc-name">
+                {doc.kind === "fusion" && (
+                  <span className="fusion-chip">{tr(language, "fusion.tag")}</span>
+                )}
+                {doc.filename}
+              </span>
               <span className="doc-date">
                 {new Date(doc.created_at).toLocaleString()} ·{" "}
                 {tr(language, `lang.${doc.language}` as UIKey)}

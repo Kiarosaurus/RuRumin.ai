@@ -32,10 +32,14 @@ export interface DocumentRecord {
   created_at: string;
   /** Language the document was analyzed in. */
   language: Language;
-  /** Clean text extracted from the .docx. */
+  /** Clean text extracted from the .docx (or the synthetic corpus, for fusions). */
   transcript_text: string;
   /** All analysis runs over this document, newest first. Empty until processed. */
   analyses: AnalysisRecord[];
+  /** "fusion" for merged projects (tagged in the UI); defaults to a normal document. */
+  kind?: "document" | "fusion";
+  /** For fusions: the filenames of the source projects that were merged. */
+  source_filenames?: string[];
 }
 
 const SAMPLE_TRANSCRIPT = [

@@ -114,6 +114,7 @@ def pyramidal_k_sequence(max_layers: int, base_k: int) -> list[int]:
 async def run_thematic_analysis(
     request: AnalysisRequest,
     emit: Emit = _noop,
+    runs: int | None = None,
 ) -> AnalysisResponse:
     """
     Orchestrate the full multi-layer thematic analysis and return the
@@ -130,6 +131,9 @@ async def run_thematic_analysis(
     k_per_layer = request.options.k_per_layer or pyramidal_k_sequence(
         max_layers, request.options.k_top
     )
+    # Forced passes per layer (best-of-N). Defaults to RUNS_PER_LAYER; callers
+    # such as the project-fusion path raise it to spend more quota per layer.
+    effective_runs = runs if runs and runs > 0 else RUNS_PER_LAYER
     await emit({"type": "progress", "phase": "starting", "max_layers": max_layers})
 
     root_layer = await _analyze_layer(
@@ -137,6 +141,7 @@ async def run_thematic_analysis(
         text_chunk=request.transcript_text,
         level=0,
         k_per_layer=k_per_layer,
+        runs=effective_runs,
         emit=emit,
     )
 
@@ -148,7 +153,7 @@ async def run_thematic_analysis(
         root_layer=root_layer,
         metadata=AnalysisMetadata(
             total_layers=total_layers,
-            total_runs=total_layers * RUNS_PER_LAYER,  # forced runs per layer
+            total_runs=total_layers * effective_runs,  # forced runs per layer
             model=request.options.model,
             language=request.language,
             source_filename=request.source_filename,
@@ -161,6 +166,7 @@ async def _analyze_layer(
     text_chunk: str,
     level: int,
     k_per_layer: list[int],
+    runs: int,
     emit: Emit = _noop,
 ) -> AnalysisLayer:
     """
@@ -173,7 +179,6 @@ async def _analyze_layer(
     max_layers = request.options.max_layers
     # Pyramidal width for this layer (apex converges to 1).
     k = k_per_layer[level] if level < len(k_per_layer) else 1
-    runs = RUNS_PER_LAYER
 
     await emit(
         {
@@ -275,6 +280,7 @@ async def _analyze_layer(
                 text_chunk=next_chunk,
                 level=level + 1,
                 k_per_layer=k_per_layer,
+                runs=runs,
                 emit=emit,
             )
         ]

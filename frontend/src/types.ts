@@ -168,3 +168,27 @@ export interface AnalysisResponse {
   /** Bookkeeping metadata. */
   metadata: AnalysisMetadata;
 }
+
+// --------------------------------------------------------------------------- //
+// Project fusion (merge several analyses). Mirrors backend `app.models`.
+// --------------------------------------------------------------------------- //
+
+/** One accepted concept contributed by a source project. Mirrors `MergeConcept`. */
+export interface MergeConcept {
+  label: string;
+  justification: string;
+  quotes: string[];
+}
+
+/** The accepted concepts of one project feeding a fusion. Mirrors `MergeProject`. */
+export interface MergeProject {
+  source_filename?: string | null;
+  concepts: MergeConcept[];
+}
+
+/** Payload for POST /api/merge-projects. Mirrors `MergeRequest`. */
+export interface MergeRequest {
+  projects: MergeProject[];
+  language: Language;
+  options?: AnalysisOptions;
+}

@@ -874,3 +874,70 @@ button:disabled .spinner {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* ---------- Fusion (multi-project merge) ---------- */
+/* Home: fusion trigger + per-card selection + tag */
+.fusion-btn {
+  border: 1px solid var(--border);
+  background: #fff;
+  color: #475569;
+  border-radius: 6px;
+  padding: 0.35rem 0.75rem;
+  font-weight: 600;
+}
+
+.fusion-btn.ready {
+  border-color: #a78bfa;
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.fusion-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.doc-select {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #7c3aed;
+}
+
+.doc-select:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.fusion-chip {
+  display: inline-block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #5b21b6;
+  background: #ede9fe;
+  border: 1px solid #c4b5fd;
+  border-radius: 999px;
+  padding: 0.05rem 0.45rem;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+}
+
+/* Fusion view: 50/50 split — DAG on the left, reader on the right. */
+.fusion-view {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: 100%;
+  width: 100%;
+}
+
+.fusion-pane {
+  height: 100%;
+  min-width: 0;
+  overflow: auto;
+}
+
+.fusion-pane-tree {
+  border-right: 2px solid var(--border);
+}

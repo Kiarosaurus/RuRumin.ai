@@ -94,7 +94,13 @@ export type UIKey =
   | "quota.use"
   | "quota.active"
   | "quota.close"
-  | "quota.activeModel";
+  | "quota.activeModel"
+  | "fusion.tag"
+  | "fusion.button"
+  | "fusion.select"
+  | "fusion.needTwo"
+  | "fusion.created"
+  | "fusion.name";
 
 const ES: Record<UIKey, string> = {
   "nav.home": "Inicio",
@@ -186,6 +192,12 @@ const ES: Record<UIKey, string> = {
   "quota.active": "Activo",
   "quota.close": "Cerrar",
   "quota.activeModel": "Modelo activo: {name}",
+  "fusion.tag": "Fusión",
+  "fusion.button": "Fusionar",
+  "fusion.select": "Seleccionar para fusionar",
+  "fusion.needTwo": "Selecciona al menos 2 proyectos para fusionar.",
+  "fusion.created": "«{name}» creada.",
+  "fusion.name": "Fusión de {count} proyectos",
 };
 
 const EN: Record<UIKey, string> = {
@@ -278,6 +290,12 @@ const EN: Record<UIKey, string> = {
   "quota.active": "Active",
   "quota.close": "Close",
   "quota.activeModel": "Active model: {name}",
+  "fusion.tag": "Fusion",
+  "fusion.button": "Merge projects",
+  "fusion.select": "Select to merge",
+  "fusion.needTwo": "Select at least 2 projects to merge.",
+  "fusion.created": "“{name}” created.",
+  "fusion.name": "Fusion of {count} projects",
 };
 
 const ZH: Record<UIKey, string> = {
@@ -368,6 +386,12 @@ const ZH: Record<UIKey, string> = {
   "quota.active": "使用中",
   "quota.close": "關閉",
   "quota.activeModel": "使用中的模型：{name}",
+  "fusion.tag": "融合",
+  "fusion.button": "融合專案",
+  "fusion.select": "選取以融合",
+  "fusion.needTwo": "請至少選取 2 個專案進行融合。",
+  "fusion.created": "已建立「{name}」。",
+  "fusion.name": "{count} 個專案的融合",
 };
 
 const TRANSLATIONS: Record<Language, Record<UIKey, string>> = {

@@ -259,5 +259,46 @@ class AnalysisResponse(BaseModel):
     metadata: AnalysisMetadata = Field(default_factory=AnalysisMetadata)
 
 
+# --------------------------------------------------------------------------- #
+# Project fusion (merge several analyses into shared macro-themes)
+# --------------------------------------------------------------------------- #
+class MergeConcept(BaseModel):
+    """One accepted (winning) concept contributed by a source project."""
+
+    label: str = Field(..., description="Concept name.")
+    justification: str = Field(
+        default="", description="Why the concept was grouped (grouping rationale)."
+    )
+    quotes: List[str] = Field(
+        default_factory=list,
+        description="Verbatim supporting phrases for the concept.",
+    )
+
+
+class MergeProject(BaseModel):
+    """The accepted concepts of one analyzed document feeding the fusion."""
+
+    source_filename: Optional[str] = Field(default=None)
+    concepts: List[MergeConcept] = Field(default_factory=list)
+
+
+class MergeRequest(BaseModel):
+    """
+    Payload for POST /api/merge-projects: the accepted concepts of >= 2 projects.
+
+    The backend assembles a synthetic corpus from these concepts and runs the
+    multi-layer thematic analysis (with extra forced passes) over it to surface
+    the macro-themes the projects share.
+    """
+
+    projects: List[MergeProject] = Field(
+        ...,
+        min_length=2,
+        description="At least two projects to fuse.",
+    )
+    language: Language = Field(..., description="Analysis language ('es'/'en'/'zh').")
+    options: AnalysisOptions = Field(default_factory=AnalysisOptions)
+
+
 # Resolve the forward reference used for recursion (`sub_layers`).
 AnalysisLayer.model_rebuild()

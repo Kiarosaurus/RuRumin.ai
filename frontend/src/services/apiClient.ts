@@ -10,6 +10,7 @@ import type {
   AnalysisRequest,
   AnalysisResponse,
   Language,
+  MergeProject,
   ProgressEvent,
 } from "../types";
 
@@ -175,6 +176,104 @@ export async function analyzeTranscriptStream(
   };
 
   // Read the stream line-by-line; lines may straddle chunk boundaries.
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let newline: number;
+    while ((newline = buffer.indexOf("\n")) >= 0) {
+      const line = buffer.slice(0, newline);
+      buffer = buffer.slice(newline + 1);
+      handleLine(line);
+    }
+  }
+  handleLine(buffer); // flush any trailing line without a newline
+
+  if (!result) {
+    throw new ApiError(0, "El servidor cerró el stream sin entregar un resultado.");
+  }
+  return result;
+}
+
+/** Result of a fusion: the analysis tree plus the corpus it was run over. */
+export interface MergeResult {
+  analysis: AnalysisResponse;
+  /** Synthetic concept corpus the fusion analyzed (used for highlighting). */
+  transcript_text: string;
+}
+
+/** One NDJSON line from the merge stream, before discrimination. */
+type MergeStreamMessage =
+  | ProgressEvent
+  | { type: "result"; data: AnalysisResponse; transcript_text: string }
+  | { type: "error"; status: number; detail: string };
+
+/**
+ * Fuse the accepted concepts of >= 2 projects into shared macro-themes,
+ * consuming the NDJSON progress stream (same event shapes as the analysis
+ * stream). Resolves to the fused analysis tree and the corpus it ran over.
+ */
+export async function mergeProjectsStream(
+  projects: MergeProject[],
+  language: Language,
+  onProgress: (event: ProgressEvent) => void,
+  options?: Partial<AnalysisOptions>,
+): Promise<MergeResult> {
+  if (projects.length < 2) {
+    throw new ApiError(400, "Se requieren al menos 2 proyectos para fusionar.");
+  }
+
+  const body = {
+    projects,
+    language,
+    ...(options ? { options: options as AnalysisOptions } : {}),
+  };
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/merge-projects/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch (cause) {
+    throw new ApiError(0, `No se pudo conectar con el backend: ${String(cause)}`);
+  }
+
+  if (!response.ok || !response.body) {
+    let detail = `La solicitud falló con estado ${response.status}.`;
+    try {
+      const payload = (await response.json()) as { detail?: string };
+      if (payload.detail) detail = payload.detail;
+    } catch {
+      /* keep default */
+    }
+    throw new ApiError(response.status, detail);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: MergeResult | null = null;
+
+  const handleLine = (line: string): void => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    let msg: MergeStreamMessage;
+    try {
+      msg = JSON.parse(trimmed) as MergeStreamMessage;
+    } catch {
+      return; // ignore malformed/partial keep-alive lines
+    }
+    if (msg.type === "progress") {
+      onProgress(msg);
+    } else if (msg.type === "result") {
+      result = { analysis: msg.data, transcript_text: msg.transcript_text };
+    } else if (msg.type === "error") {
+      throw new ApiError(msg.status, msg.detail);
+    }
+  };
+
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;

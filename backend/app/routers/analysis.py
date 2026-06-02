@@ -15,8 +15,8 @@ from fastapi import APIRouter, HTTPException, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 
-from app.models import AnalysisRequest, AnalysisResponse
-from app.services import analyzer
+from app.models import AnalysisRequest, AnalysisResponse, MergeRequest
+from app.services import analyzer, merge
 
 logger = logging.getLogger("rurumin.analysis")
 
@@ -84,6 +84,71 @@ async def analyze_transcript_stream(request: AnalysisRequest) -> StreamingRespon
             )
         except Exception:  # noqa: BLE001 - last line of defense for the stream
             logger.exception("Unhandled error during streamed analysis")
+            await queue.put(
+                {"type": "error", "status": 500, "detail": "Internal server error."}
+            )
+        finally:
+            await queue.put(None)  # sentinel: end of stream
+
+    async def streamer():
+        task = asyncio.create_task(run())
+        try:
+            while True:
+                event = await queue.get()
+                if event is None:
+                    break
+                yield json.dumps(event, ensure_ascii=False) + "\n"
+        finally:
+            if not task.done():
+                task.cancel()
+
+    return StreamingResponse(streamer(), media_type="application/x-ndjson")
+
+
+@router.post(
+    "/merge-projects/stream",
+    summary="Stream a multi-project fusion (shared macro-themes) as NDJSON.",
+)
+async def merge_projects_stream(request: MergeRequest) -> StreamingResponse:
+    """
+    Fuse the accepted concepts of >= 2 projects into their shared macro-themes,
+    streaming live progress (same NDJSON event contract as analyze/stream).
+
+    The terminal success line carries BOTH the analysis tree and the synthetic
+    corpus the fusion ran over (so the UI can highlight against it):
+      {"type": "result", "data": {AnalysisResponse}, "transcript_text": "..."}
+
+    Pydantic already rejects fewer than 2 projects with 422; an all-empty
+    concept set (nothing to fuse) is rejected here with 400.
+    """
+    corpus = merge.build_merge_corpus(request)
+    if not corpus.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Los proyectos seleccionados no tienen conceptos para fusionar.",
+        )
+
+    queue: asyncio.Queue[dict | None] = asyncio.Queue()
+
+    async def emit(event: dict) -> None:
+        await queue.put(event)
+
+    async def run() -> None:
+        try:
+            response, text = await merge.run_project_merge(request, emit=emit)
+            await queue.put(
+                {
+                    "type": "result",
+                    "data": jsonable_encoder(response),
+                    "transcript_text": text,
+                }
+            )
+        except HTTPException as exc:
+            await queue.put(
+                {"type": "error", "status": exc.status_code, "detail": exc.detail}
+            )
+        except Exception:  # noqa: BLE001 - last line of defense for the stream
+            logger.exception("Unhandled error during project fusion")
             await queue.put(
                 {"type": "error", "status": 500, "detail": "Internal server error."}
             )

@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import { Home } from "./components/Home";
+import { FusionView } from "./components/FusionView";
 import { ReaderSummary } from "./components/ReaderSummary";
 import { Toast, type ToastState } from "./components/Toast";
 import { TreeView } from "./components/TreeView";
@@ -23,15 +24,19 @@ import {
   type AnalysisRecord,
   type DocumentRecord,
 } from "./data/mockData";
-import { analyzeTranscriptStream, ApiError } from "./services/apiClient";
+import {
+  analyzeTranscriptStream,
+  ApiError,
+  mergeProjectsStream,
+} from "./services/apiClient";
 import { loadDocuments, saveDocuments } from "./services/storage";
 import { consumeQuota, loadQuota, type QuotaState } from "./services/quota";
 import { DEFAULT_MODEL } from "./data/models";
 import type { AnalysisConfigResult } from "./components/AnalysisConfigModal";
-import type { AnalysisOptions, Language } from "./types";
+import type { AnalysisOptions, Language, MergeProject } from "./types";
 import { tr } from "./utils/i18n";
 
-type View = "home" | "summary" | "tree";
+type View = "home" | "summary" | "tree" | "fusion";
 
 export default function App() {
   const [view, setView] = useState<View>("home");
@@ -111,7 +116,8 @@ export default function App() {
     setActiveAnalysisId(doc.analyses[0]?.id ?? null);
     // Match the UI language to the document's analysis language.
     setLanguage(doc.language);
-    setView("summary");
+    // Fusions open in the dedicated split view; documents in the reader.
+    setView(doc.kind === "fusion" ? "fusion" : "summary");
   }, []);
 
   /** Add a freshly analyzed document to the repository and open it. */
@@ -209,6 +215,84 @@ export default function App() {
     [active, busyIds, notify, onProgress, resetProgress, selectedModel, handleConsumeQuota],
   );
 
+  /**
+   * Fuse >= 2 documents into shared macro-themes. Builds a merge payload from
+   * each document's newest analysis (its base/accepted concepts), runs the
+   * fusion with the chosen pyramid + active model, then stores the result as a
+   * new "fusion" document and opens it.
+   */
+  const handleMerge = useCallback(
+    async (docs: DocumentRecord[], config: AnalysisConfigResult) => {
+      const projects: MergeProject[] = docs.map((d) => {
+        const base = d.analyses[0]?.result.root_layer.winning_concepts ?? [];
+        return {
+          source_filename: d.filename,
+          concepts: base.map((c) => ({
+            label: c.label,
+            justification: c.grouping_justification,
+            quotes: c.supporting_quotes,
+          })),
+        };
+      });
+
+      // A synthetic busy key drives the global progress overlay for the fusion.
+      const busyKey = `fusion-${Date.now()}`;
+      setBusyIds((prev) => [...prev, busyKey]);
+      resetProgress();
+      try {
+        const options: Partial<AnalysisOptions> = {
+          max_layers: config.max_layers,
+          model: selectedModel,
+          ...(config.k_per_layer ? { k_per_layer: config.k_per_layer } : {}),
+        };
+        const { analysis, transcript_text } = await mergeProjectsStream(
+          projects,
+          language,
+          onProgress,
+          options,
+        );
+        const record: AnalysisRecord = {
+          id: analysis.request_id,
+          timestamp: analysis.metadata.created_at,
+          max_layers: config.max_layers,
+          result: analysis,
+        };
+        const name = tr(language, "fusion.name", { count: docs.length });
+        const doc: DocumentRecord = {
+          id: analysis.request_id,
+          filename: name,
+          status: "processed",
+          created_at: analysis.metadata.created_at,
+          language,
+          transcript_text,
+          analyses: [record],
+          kind: "fusion",
+          source_filenames: docs.map((d) => d.filename),
+        };
+        setDocuments((prev) => [doc, ...prev]);
+        openDoc(doc);
+        notify({ kind: "success", message: tr(language, "fusion.created", { name }) });
+        handleConsumeQuota(selectedModel, analysis.metadata.total_runs);
+      } catch (err) {
+        if (err instanceof ApiError) {
+          const prefix =
+            err.status === 0
+              ? tr(language, "toast.noConnection")
+              : tr(language, "toast.error", { status: err.status });
+          notify({ kind: "error", message: `${prefix}: ${err.message}` });
+        } else {
+          notify({
+            kind: "error",
+            message: `${tr(language, "toast.unexpected")}: ${String(err)}`,
+          });
+        }
+      } finally {
+        setBusyIds((prev) => prev.filter((id) => id !== busyKey));
+      }
+    },
+    [language, selectedModel, notify, onProgress, resetProgress, openDoc, handleConsumeQuota],
+  );
+
   /** The analysis run currently displayed for the active document. */
   const activeAnalysis = useMemo<AnalysisRecord | null>(() => {
     if (!active || active.analyses.length === 0) return null;
@@ -219,7 +303,7 @@ export default function App() {
   }, [active, activeAnalysisId]);
 
   const hasAnalysis = activeAnalysis != null;
-  const isReader = view === "summary" || view === "tree";
+  const isReader = view === "summary" || view === "tree" || view === "fusion";
 
   return (
     <div className="app">
@@ -242,6 +326,15 @@ export default function App() {
         >
           {tr(language, "nav.tree")}
         </button>
+        {active?.kind === "fusion" && (
+          <button
+            className={view === "fusion" ? "active" : ""}
+            disabled={!hasAnalysis}
+            onClick={() => setView("fusion")}
+          >
+            {tr(language, "fusion.tag")}
+          </button>
+        )}
         {active && <span className="active-doc">{active.filename}</span>}
         {isReader && active && active.analyses.length > 0 && (
           <label className="analysis-switcher">
@@ -279,6 +372,7 @@ export default function App() {
             onAnalyzed={handleAnalyzed}
             onDelete={handleDelete}
             onReanalyze={handleReanalyze}
+            onMerge={handleMerge}
             notify={notify}
           />
         )}
@@ -291,6 +385,13 @@ export default function App() {
         )}
         {view === "tree" && activeAnalysis && (
           <TreeView analysis={activeAnalysis.result} language={language} />
+        )}
+        {view === "fusion" && activeAnalysis && active && (
+          <FusionView
+            transcriptText={active.transcript_text}
+            analysis={activeAnalysis.result}
+            language={language}
+          />
         )}
       </main>
 
