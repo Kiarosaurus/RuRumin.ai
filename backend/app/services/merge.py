@@ -18,7 +18,13 @@ substrings of this corpus).
 
 from __future__ import annotations
 
-from app.models import AnalysisRequest, AnalysisResponse, MergeProject, MergeRequest
+from app.models import (
+    AnalysisRequest,
+    AnalysisResponse,
+    Language,
+    MergeProject,
+    MergeRequest,
+)
 from app.prompts import build_merge_prompt
 from app.rate_limiter import Emit, _noop
 from app.services.analyzer import run_thematic_analysis
@@ -27,19 +33,29 @@ from app.services.analyzer import run_thematic_analysis
 # shared macro-themes surface robustly across the combined concept set.
 MERGE_RUNS_PER_LAYER = 10
 
+# Localized label that precedes a project's structural sections in the corpus, so
+# the line reads naturally in the analysis language the fusion runs in.
+_SECTIONS_LABEL: dict[Language, str] = {
+    "es": "Secciones",
+    "en": "Sections",
+    "zh": "章節",
+}
 
-def _project_block(project: MergeProject) -> str:
+
+def _project_block(project: MergeProject, language: Language) -> str:
     """
     Render one project's lean corpus block: a ``[source_filename]`` header, an
-    optional structural sections line, then one ``label. justification`` line per
-    accepted concept. Quotes are omitted (token-heavy — the 502 cause).
+    optional structural sections line (localized), then one ``label.
+    justification`` line per accepted concept. Quotes are omitted (token-heavy —
+    the 502 cause).
     """
     lines: list[str] = []
     if project.source_filename:
         lines.append(f"[{project.source_filename}]")
     sections = [t.strip() for t in project.structural_themes if t.strip()]
     if sections:
-        lines.append("Secciones: " + " | ".join(sections))
+        label = _SECTIONS_LABEL.get(language, _SECTIONS_LABEL["es"])
+        lines.append(f"{label}: " + " | ".join(sections))
     for concept in project.concepts:
         parts = [concept.label.strip()]
         if concept.justification.strip():
@@ -59,7 +75,11 @@ def build_merge_corpus(request: MergeRequest) -> str:
     highlight each source document independently.
     """
     return "\n".join(
-        block for block in (_project_block(p) for p in request.projects) if block
+        block
+        for block in (
+            _project_block(p, request.language) for p in request.projects
+        )
+        if block
     )
 
 
@@ -74,7 +94,7 @@ def build_merge_sources(request: MergeRequest) -> list[dict[str, str | None]]:
     """
     sources: list[dict[str, str | None]] = []
     for project in request.projects:
-        block = _project_block(project)
+        block = _project_block(project, request.language)
         if block.strip():
             sources.append({"source_filename": project.source_filename, "text": block})
     return sources

@@ -83,6 +83,14 @@ def test_corpus_includes_structural_sections():
     assert "Secciones: (一）precio" in corpus
 
 
+def test_sections_label_is_localized():
+    req = _request()
+    req.language = "en"
+    assert "Sections: (一）precio" in build_merge_corpus(req)
+    req.language = "zh"
+    assert "章節: (一）precio" in build_merge_corpus(req)
+
+
 def test_sources_split_per_document_for_stacked_view():
     sources = build_merge_sources(_request())
     # One block per project, each with only its own concepts.
