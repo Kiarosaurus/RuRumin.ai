@@ -13,10 +13,10 @@ RuRumin.ai/
 │  ├─ app/
 │  │  ├─ models.py          Contratos Pydantic (recursivos)
 │  │  ├─ main.py            App FastAPI + CORS + manejo de errores
-│  │  ├─ prompts.py         Prompt de análisis por layer (Gemini)
-│  │  ├─ llm_schema.py      Validación del JSON crudo del modelo
+│  │  ├─ prompts.py         Prompts Gemini: por layer + Pass 0 estructural + fusión cruzada
+│  │  ├─ llm_schema.py      Validación del JSON crudo del modelo (layer + Pass 0)
 │  │  ├─ routers/analysis.py  POST /api/analyze-transcript(/stream) + /api/merge-projects/stream
-│  │  └─ services/          analyzer (pirámide) + aggregation + merge (fusión) + mapping
+│  │  └─ services/          analyzer (pirámide + Pass 0) + aggregation + merge (fusión) + mapping
 │  ├─ requirements.txt
 │  ├─ Dockerfile            Imagen para Google Cloud Run (puerto 8080)
 │  └─ .dockerignore
@@ -24,7 +24,7 @@ RuRumin.ai/
 │  ├─ src/
 │  │  ├─ types.ts           Interfaces TS (espejo 1:1 de Pydantic)
 │  │  ├─ services/          apiClient + docxExtractor + quota (cuotas locales, IndexedDB)
-│  │  ├─ components/        Home, ReaderSummary (toggle), TreeView, FusionView, modales
+│  │  ├─ components/        Home, ReaderSummary (toggle), TreeView, FusionView/FusionReader, modales
 │  │  ├─ utils/             i18n, colors, layers, pyramid (config manual)
 │  │  └─ data/              mockData + models (catálogo de modelos de IA)
 │  ├─ src-tauri/            Proyecto Rust de Tauri (config + íconos)
@@ -155,6 +155,27 @@ Además, el prompt exige la **máxima densidad de `frases_origen`** por concepto
 (exhaustividad sobre escasez): cada concepto queda respaldado por todas las citas
 posibles del texto.
 
+### Pre-Pasada Estructural (Pass 0)
+
+Opción marcable en el popup de configuración: **«Considerar los temas/secciones
+estructurales de la entrevista (1 pasada de IA extra)»**. Cuando se activa, antes
+de las capas temáticas se ejecuta una **Pasada 0** barata que lee la transcripción
+y extrae solo su **esqueleto estructural**: los capítulos, apartados o fases de la
+entrevista (p. ej. `(一）過去使用交友軟體的經驗`), copiados de forma textual y en orden.
+
+- **Cómo mejora el análisis:** esos `structural_themes` se **inyectan como
+  contexto en el prompt del Layer 0**, de modo que la IA agrupa los conceptos
+  respetando el hilo estructural real de la entrevista en lugar de trocearla a
+  ciegas.
+- **Contrato de datos:** los `structural_themes` se guardan en
+  `metadata.structural_themes` del `AnalysisRecord`, por lo que quedan disponibles
+  para **fusiones futuras** (cada proyecto puede aportar su estructura).
+- **Coste:** exactamente **una** llamada adicional a Gemini (se contabiliza en
+  `metadata.total_runs` y se descuenta de la cuota). Si la Pasada 0 falla, el
+  análisis continúa sin contexto estructural (degradación elegante).
+- Implementación: `build_structural_prompt` (prompt), `StructuralLLMOutput`
+  (validación), `extract_structural_themes` (orquestación) en el backend.
+
 ### Cuotas Locales de IA
 
 El nivel gratuito de Gemini limita las peticiones **por día (RPD)** por modelo. Como
@@ -174,12 +195,35 @@ Permite **combinar varios proyectos** para encontrar sus **macro-temáticas comu
 1. En *Home*, marca las casillas de **2 o más** documentos y pulsa **Fusionar** (con
    menos de 2 seleccionados, un *toast* lo advierte).
 2. Elige la estructura en el popup de configuración (igual que un análisis normal).
-3. El backend reúne los **conceptos aceptados** de cada proyecto en un corpus y lo
-   re-analiza con **10 pasadas por capa** (`POST /api/merge-projects/stream`) para
-   que emerjan los temas compartidos.
+3. El backend reúne los **conceptos aceptados** de cada proyecto y los re-analiza
+   con **10 pasadas por capa** mediante un **prompt de síntesis cruzada estricto**
+   (`build_merge_prompt`, `POST /api/merge-projects/stream`) para que emerjan los
+   patrones transversales compartidos por varios proyectos.
 4. El resultado se guarda como un **nuevo proyecto etiquetado «Fusión»** y se abre en
    la **vista Fusión**: pantalla dividida 50/50 con el **DAG** del merge a la
-   izquierda y el **Resumen** (con el toggle *Aceptados/Rechazados*) a la derecha.
+   izquierda y la **vista apilada filtrable** a la derecha (ver abajo).
+
+#### Estrategia de Fusión Optimizada (evita el agotamiento de tokens del LLM)
+
+Enviar las **transcripciones completas** de hasta 8 documentos saturaba el contexto
+del modelo y provocaba fallos de esquema JSON (**error 502**). La fusión ahora
+construye un **corpus liviano** que contiene **únicamente los `conceptos_aceptados`**
+(nombre + justificación) y sus `structural_themes`, **sin las transcripciones crudas
+ni las `frases_origen`** (que eran el grueso de los tokens). Como cada proyecto
+aporta solo su síntesis ya destilada, el payload cabe holgadamente en el contexto y
+el esquema estricto deja de romperse. El prompt cruzado pide a la IA encontrar los
+**patrones comunes entre proyectos** para construir las nuevas macro-capas.
+
+#### Vista Apilada Filtrable (highlights correctos)
+
+Concatenar varios documentos en una sola cadena rompía los índices absolutos
+`[start, end]` que necesita `buildOverlapSegments` para resaltar. La vista Fusión
+**no concatena**: renderiza un **bloque de texto independiente por documento de
+origen** (`sources`), apilados verticalmente. Cada bloque calcula su propia
+superposición sobre **su texto local**, por lo que los índices nunca colisionan
+entre documentos. Encima de los bloques hay **chips de toggle** para mostrar/ocultar
+cada documento; al hacer clic en un **macro-concepto del DAG** se filtran los
+conceptos base y se resaltan en los bloques que los contienen.
 
 ## Docker (backend → Cloud Run)
 
