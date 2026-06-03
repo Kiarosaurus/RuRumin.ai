@@ -226,14 +226,21 @@ export default function App() {
   const handleMerge = useCallback(
     async (docs: DocumentRecord[], config: AnalysisConfigResult) => {
       const projects: MergeProject[] = docs.map((d) => {
-        const base = d.analyses[0]?.result.root_layer.winning_concepts ?? [];
+        const latest = d.analyses[0];
+        const base = latest?.result.root_layer.winning_concepts ?? [];
         return {
           source_filename: d.filename,
+          // Quotes are intentionally omitted: the fusion runs over concept names
+          // + justifications only, to keep the LLM payload lean (502 fix).
           concepts: base.map((c) => ({
             label: c.label,
             justification: c.grouping_justification,
-            quotes: c.supporting_quotes,
+            quotes: [],
           })),
+          structural_themes:
+            latest?.structural_themes ??
+            latest?.result.metadata.structural_themes ??
+            [],
         };
       });
 

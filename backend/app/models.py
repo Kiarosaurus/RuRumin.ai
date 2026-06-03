@@ -297,6 +297,14 @@ class MergeProject(BaseModel):
 
     source_filename: Optional[str] = Field(default=None)
     concepts: List[MergeConcept] = Field(default_factory=list)
+    structural_themes: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Structural sections/phases of this project (from its Pass 0), carried "
+            "into the fusion as context. Empty when the project had no structural "
+            "pass."
+        ),
+    )
 
 
 class MergeRequest(BaseModel):

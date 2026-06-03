@@ -197,6 +197,8 @@ export interface MergeConcept {
 export interface MergeProject {
   source_filename?: string | null;
   concepts: MergeConcept[];
+  /** Structural sections/phases of this project (Pass 0), carried into the fusion. */
+  structural_themes?: string[];
 }
 
 /** Payload for POST /api/merge-projects. Mirrors `MergeRequest`. */

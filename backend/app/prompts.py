@@ -323,6 +323,141 @@ _FINAL_LAYER_DIRECTIVE: dict[Language, str] = {
 }
 
 
+# --------------------------------------------------------------------------- #
+# Cross-project fusion prompt (merge_prompts)
+#
+# A fusion does NOT analyze a transcript: its input is the set of ACCEPTED
+# concepts (name + grouping justification) of several independent projects,
+# grouped per project and preceded by each project's structural sections. Sending
+# the raw transcripts caused context exhaustion and JSON schema failures (502),
+# so the payload is restricted to those concepts only. This dedicated, strict
+# prompt asks the model to find the cross-project patterns and build the shared
+# macro-layers, while keeping the exact same Spanish-keyed schema as the layer
+# prompt so `app.llm_schema.LayerLLMOutput` validation is unchanged.
+# --------------------------------------------------------------------------- #
+_MERGE_INSTRUCTIONS: dict[Language, str] = {
+    "es": """\
+Rol: Eres un Investigador Cualitativo Experto que realiza una SÍNTESIS CRUZADA \
+(fusión) entre varios proyectos ya analizados.
+
+Contexto: Estás en el Layer {current_layer} de una fusión. La ENTRADA NO es una \
+transcripción: es el conjunto de CONCEPTOS ACEPTADOS (nombre + justificación) de \
+varios proyectos independientes, agrupados por proyecto (cada bloque abre con \
+[nombre_de_archivo]) y, cuando existen, precedidos por sus secciones \
+estructurales. NO inventes contenido que no esté en estas líneas.
+
+Tarea: Encuentra los PATRONES TRANSVERSALES entre proyectos. Agrupa los \
+conceptos que se repiten, convergen o se reflejan entre distintos proyectos en \
+MACRO-CONCEPTOS compartidos, usando la métrica k-top para quedarte con los \
+{k_top} macro-conceptos más fuertes y representativos del conjunto.
+
+Reglas:
+- Transversalidad: prioriza los macro-conceptos sustentados por conceptos de DOS \
+O MÁS proyectos; un patrón que aparece en varios proyectos es más fuerte que uno \
+aislado.
+- Evidencia (frases_origen): cada frase_origen debe copiarse TEXTUALMENTE de las \
+líneas de concepto provistas en la entrada (nombres o justificaciones), nunca \
+parafrasees ni inventes. Extrae la mayor cantidad posible.
+- Superposición (Overlap): un mismo concepto base puede sustentar varios \
+macro-conceptos si aporta a más de un patrón.
+- Justificación: en "justificacion_agrupacion" explica de forma EXTENSA (3-4 \
+párrafos) qué patrón transversal une a esos conceptos, en qué proyectos aparece \
+y qué tensión o matiz revela la comparación entre proyectos.
+- Descartados: en "conceptos_descartados" coloca los conceptos idiosincrásicos de \
+un solo proyecto que no encuentran eco en los demás; "motivo_descarte" corto y \
+"analisis_descarte" crítico de 3-4 párrafos.
+- Deduplicación: fusiona macro-conceptos casi idénticos; nunca devuelvas dos que \
+signifiquen lo mismo.""",
+    "en": """\
+Role: You are an Expert Qualitative Researcher performing a CROSS-PROJECT \
+SYNTHESIS (fusion) across several already-analyzed projects.
+
+Context: You are at Layer {current_layer} of a fusion. The INPUT is NOT a \
+transcript: it is the set of ACCEPTED concepts (name + justification) of several \
+independent projects, grouped per project (each block opens with [filename]) and, \
+when present, preceded by their structural sections. Do NOT invent content that \
+is not in these lines.
+
+Task: Find the CROSS-CUTTING patterns across projects. Group the concepts that \
+recur, converge or mirror each other across different projects into shared \
+MACRO-CONCEPTS, using the k-top metric to keep the {k_top} strongest, most \
+representative macro-concepts of the set.
+
+Rules:
+- Cross-cutting: prioritize macro-concepts supported by concepts from TWO OR MORE \
+projects; a pattern present across several projects is stronger than an isolated \
+one.
+- Evidence (frases_origen): every frase_origen must be copied VERBATIM from the \
+concept lines provided in the input (names or justifications), never paraphrase \
+or invent. Extract as many as possible.
+- Overlap: the same base concept may support several macro-concepts when it \
+contributes to more than one pattern.
+- Justification: in "justificacion_agrupacion" explain EXTENSIVELY (3-4 \
+paragraphs) what cross-cutting pattern unites those concepts, in which projects \
+it appears and what tension or nuance the comparison reveals.
+- Discarded: in "conceptos_descartados" place the idiosyncratic single-project \
+concepts that find no echo in the others; short "motivo_descarte" and a critical \
+3-4 paragraph "analisis_descarte".
+- Deduplication: merge near-identical macro-concepts; never return two that mean \
+the same thing.""",
+    "zh": """\
+角色：你是一名資深定性研究專家，正在對多個已完成分析的專案進行「跨專案綜合」（融合）。
+
+背景：你正處於融合的第 {current_layer} 層。輸入「並非」訪談記錄，而是多個獨立專案\
+的「已接受概念」（名稱＋理由）集合，依專案分組（每個區塊以 [檔名] 開頭），若有則\
+在其前列出該專案的結構段落。請勿杜撰這些行中不存在的內容。
+
+任務：找出跨專案的「貫穿性」模式。將在不同專案間重複、彼此呼應或趨同的概念，歸納為\
+共享的「宏觀概念」，並使用 k-top 指標保留全集中最強、最具代表性的 {k_top} 個宏觀概念。
+
+規則：
+- 貫穿性：優先選取由「兩個或以上」專案的概念所支撐的宏觀概念；跨多個專案出現的模式\
+比孤立模式更強。
+- 證據（frases_origen）：每一條 frase_origen 都必須逐字（VERBATIM）複製自輸入中提供的\
+概念行（名稱或理由），切勿改寫或杜撰。盡可能多取。
+- 重疊（Overlap）：同一個基礎概念若對多個模式有貢獻，可支撐多個宏觀概念。
+- 理由：在 "justificacion_agrupacion" 中詳盡（3-4 段）說明是什麼貫穿性模式將這些概念\
+聯繫起來、出現在哪些專案，以及比較所揭示的張力或細微差異。
+- 被捨棄：在 "conceptos_descartados" 放入僅見於單一專案、在其他專案中無呼應的特異概念；\
+"motivo_descarte" 簡短，"analisis_descarte" 為 3-4 段的批判性說明。
+- 去重：合併幾乎相同的宏觀概念；切勿返回兩個語意相同者。""",
+}
+
+
+def build_merge_prompt(
+    current_layer: int,
+    interview_text_chunk: str,
+    k_top: int,
+    language: Language,
+    max_layers: int = 5,
+    structural_themes: list[str] | None = None,
+) -> str:
+    """
+    Render the cross-project fusion prompt for one Gemini run in `language`.
+
+    Drop-in replacement for `build_layer_prompt` (identical signature) used by the
+    project-fusion path. The instructions are fusion-specific and strict, but the
+    JSON schema, key directive and final-layer convergence rule are shared, so the
+    output validates against the same `LayerLLMOutput` schema.
+    """
+    instructions = _MERGE_INSTRUCTIONS[language].format(
+        current_layer=current_layer,
+        k_top=k_top,
+    )
+    if current_layer >= max_layers - 1:
+        instructions = f"{instructions}\n\n{_FINAL_LAYER_DIRECTIVE[language]}"
+    context = _structural_context_block(structural_themes, language)
+    if context:
+        instructions = f"{instructions}\n\n{context}"
+    schema = _JSON_SCHEMA_BLOCK.format(current_layer=current_layer)
+    directive = _KEY_DIRECTIVE[language]
+    label = _INPUT_LABEL[language]
+    return (
+        f"{instructions}\n\n{directive}\n\n{schema}\n{label}\n"
+        f'"{interview_text_chunk}"\n'
+    )
+
+
 def build_layer_prompt(
     current_layer: int,
     interview_text_chunk: str,

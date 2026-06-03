@@ -46,6 +46,7 @@ def _request() -> MergeRequest:
                 concepts=[
                     MergeConcept(label="Costo", justification="importa", quotes=["el costo"]),
                 ],
+                structural_themes=["(一）precio"],
             ),
             MergeProject(
                 source_filename="b.docx",
@@ -61,12 +62,24 @@ def _request() -> MergeRequest:
     )
 
 
-def test_corpus_includes_every_project_concept():
+def test_corpus_includes_concept_names_and_justifications():
     corpus = build_merge_corpus(_request())
     assert "[a.docx]" in corpus
     assert "[b.docx]" in corpus
-    assert "Costo. importa. el costo" in corpus
-    assert "Confianza. clave. la confianza" in corpus
+    assert "Costo. importa" in corpus
+    assert "Confianza. clave" in corpus
+
+
+def test_corpus_omits_quotes_to_prevent_502():
+    # The lean corpus must NOT carry the (token-heavy) supporting quotes.
+    corpus = build_merge_corpus(_request())
+    assert "el costo" not in corpus
+    assert "la confianza" not in corpus
+
+
+def test_corpus_includes_structural_sections():
+    corpus = build_merge_corpus(_request())
+    assert "Secciones: (一）precio" in corpus
 
 
 def test_merge_requires_at_least_two_projects():
@@ -96,3 +109,17 @@ async def test_merge_returns_tree_and_corpus(monkeypatch):
     assert response.metadata.source_filename == "Fusión"
     assert response.root_layer.winning_concepts[0].label == "Costo"
     assert corpus.strip() != ""
+
+
+async def test_merge_uses_strict_cross_project_prompt(monkeypatch):
+    monkeypatch.setattr(merge, "MERGE_RUNS_PER_LAYER", 1)
+    gen = install_fake_client(monkeypatch, return_value=gemini_response(VALID_JSON))
+
+    await run_project_merge(_request())
+
+    # Every call must carry the strict fusion prompt, not the plain layer prompt.
+    prompt = gen.call_args_list[0].kwargs["contents"]
+    assert "SÍNTESIS CRUZADA" in prompt
+    # The lean corpus (concept names, no quotes) is what the model sees.
+    assert "Costo. importa" in prompt
+    assert "el costo" not in prompt

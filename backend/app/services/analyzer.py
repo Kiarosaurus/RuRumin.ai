@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
+from typing import Protocol
 
 from fastapi import HTTPException, status
 from google import genai
@@ -35,6 +36,7 @@ from app.models import (
     AnalysisRequest,
     AnalysisResponse,
     AnalysisStatus,
+    Language,
 )
 from app.prompts import build_layer_prompt, build_structural_prompt
 from app.rate_limiter import LIMITER, Emit, _noop
@@ -43,6 +45,25 @@ from app.services.embeddings import embed_texts
 from app.services.mapping import llm_output_to_layer
 
 logger = logging.getLogger("rurumin.analyzer")
+
+
+class PromptBuilder(Protocol):
+    """
+    Signature shared by `build_layer_prompt` and `build_merge_prompt`.
+
+    Lets the orchestrator swap in the strict cross-project fusion prompt without
+    duplicating the pyramid/recursion logic.
+    """
+
+    def __call__(
+        self,
+        current_layer: int,
+        interview_text_chunk: str,
+        k_top: int,
+        language: Language,
+        max_layers: int = ...,
+        structural_themes: list[str] | None = ...,
+    ) -> str: ...
 
 # --- Resilience tuning ----------------------------------------------------- #
 GEMINI_TIMEOUT_SECONDS = 120.0
@@ -115,6 +136,7 @@ async def run_thematic_analysis(
     request: AnalysisRequest,
     emit: Emit = _noop,
     runs: int | None = None,
+    prompt_builder: PromptBuilder = build_layer_prompt,
 ) -> AnalysisResponse:
     """
     Orchestrate the full multi-layer thematic analysis and return the
@@ -150,6 +172,7 @@ async def run_thematic_analysis(
         runs=effective_runs,
         emit=emit,
         structural_themes=structural_themes,
+        prompt_builder=prompt_builder,
     )
 
     await emit({"type": "progress", "phase": "finalizing"})
@@ -212,6 +235,7 @@ async def _analyze_layer(
     runs: int,
     emit: Emit = _noop,
     structural_themes: list[str] | None = None,
+    prompt_builder: PromptBuilder = build_layer_prompt,
 ) -> AnalysisLayer:
     """
     Run one layer (prompt -> model -> validate -> map) and recurse on winners.
@@ -238,8 +262,9 @@ async def _analyze_layer(
     )
 
     # 1. build the prompt for this layer in the requested language. Structural
-    #    context (Pass 0) only enriches the base layer (level 0).
-    prompt = build_layer_prompt(
+    #    context (Pass 0) only enriches the base layer (level 0). `prompt_builder`
+    #    is the standard layer prompt, or the strict fusion prompt for a merge.
+    prompt = prompt_builder(
         current_layer=level,
         interview_text_chunk=text_chunk,
         k_top=k,
@@ -331,6 +356,7 @@ async def _analyze_layer(
                 k_per_layer=k_per_layer,
                 runs=runs,
                 emit=emit,
+                prompt_builder=prompt_builder,
             )
         ]
 
