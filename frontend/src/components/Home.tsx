@@ -110,6 +110,7 @@ export function Home({
       const options: Partial<AnalysisOptions> = {
         max_layers: config.max_layers,
         model: selectedModel,
+        ...(config.structural_pass ? { structural_pass: true } : {}),
         ...(config.k_per_layer ? { k_per_layer: config.k_per_layer } : {}),
       };
       const analysis = await analyzeTranscriptStream(
@@ -125,6 +126,7 @@ export function Home({
         id: analysis.request_id,
         timestamp: analysis.metadata.created_at,
         max_layers: config.max_layers,
+        structural_themes: analysis.metadata.structural_themes ?? [],
         result: analysis,
       };
       const doc: DocumentRecord = {

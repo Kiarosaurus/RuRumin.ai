@@ -16,6 +16,8 @@ import { defaultPyramid, normalizePyramid } from "../utils/pyramid";
 /** What the popup resolves to; maps onto AnalysisOptions (model added later). */
 export interface AnalysisConfigResult {
   max_layers: number;
+  /** Run the Pass 0 structural pre-pass (one extra AI call) before the layers. */
+  structural_pass: boolean;
   /** Manual pyramid; omitted in automatic mode (backend computes it). */
   k_per_layer?: number[];
 }
@@ -37,6 +39,8 @@ export function AnalysisConfigModal({ name, language, onCancel, onConfirm }: Pro
   const [mode, setMode] = useState<"auto" | "manual">("auto");
   const [layerCount, setLayerCount] = useState(AUTO_LAYERS);
   const [counts, setCounts] = useState<number[]>(() => defaultPyramid(AUTO_LAYERS));
+  /** Pass 0 structural pre-pass opt-in (off by default; one extra AI call). */
+  const [structural, setStructural] = useState(false);
 
   const changeLayerCount = (raw: number) => {
     const n = Math.min(
@@ -57,10 +61,14 @@ export function AnalysisConfigModal({ name, language, onCancel, onConfirm }: Pro
 
   const confirm = () => {
     if (mode === "auto") {
-      onConfirm({ max_layers: AUTO_LAYERS });
+      onConfirm({ max_layers: AUTO_LAYERS, structural_pass: structural });
     } else {
       const k_per_layer = normalizePyramid(counts);
-      onConfirm({ max_layers: k_per_layer.length, k_per_layer });
+      onConfirm({
+        max_layers: k_per_layer.length,
+        k_per_layer,
+        structural_pass: structural,
+      });
     }
   };
 
@@ -150,6 +158,17 @@ export function AnalysisConfigModal({ name, language, onCancel, onConfirm }: Pro
               <p className="modal-hint">{tr(language, "config.pyramidHint")}</p>
             </div>
           )}
+
+          <label className="config-structural">
+            <input
+              type="checkbox"
+              checked={structural}
+              onChange={(e) => setStructural(e.target.checked)}
+            />
+            <span className="config-structural-text">
+              {tr(language, "config.structural")}
+            </span>
+          </label>
         </div>
 
         <footer className="modal-actions">

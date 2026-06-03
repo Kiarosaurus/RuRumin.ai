@@ -165,6 +165,7 @@ export default function App() {
         const options: Partial<AnalysisOptions> = {
           max_layers: config.max_layers,
           model: selectedModel,
+          ...(config.structural_pass ? { structural_pass: true } : {}),
           ...(config.k_per_layer ? { k_per_layer: config.k_per_layer } : {}),
         };
         const result = await analyzeTranscriptStream(
@@ -178,6 +179,7 @@ export default function App() {
           id: result.request_id,
           timestamp: result.metadata.created_at,
           max_layers: config.max_layers,
+          structural_themes: result.metadata.structural_themes ?? [],
           result,
         };
         const updated: DocumentRecord = {
@@ -243,6 +245,7 @@ export default function App() {
         const options: Partial<AnalysisOptions> = {
           max_layers: config.max_layers,
           model: selectedModel,
+          ...(config.structural_pass ? { structural_pass: true } : {}),
           ...(config.k_per_layer ? { k_per_layer: config.k_per_layer } : {}),
         };
         const { analysis, transcript_text } = await mergeProjectsStream(
@@ -255,6 +258,7 @@ export default function App() {
           id: analysis.request_id,
           timestamp: analysis.metadata.created_at,
           max_layers: config.max_layers,
+          structural_themes: analysis.metadata.structural_themes ?? [],
           result: analysis,
         };
         const name = tr(language, "fusion.name", { count: docs.length });

@@ -140,6 +140,8 @@ function phaseMessage(
       return tr(language, "progress.layer_done", { layer: layer1 });
     case "finalizing":
       return tr(language, "progress.finalizing");
+    case "structural":
+      return tr(language, "progress.structural");
     case "starting":
     default:
       return tr(language, "progress.starting");

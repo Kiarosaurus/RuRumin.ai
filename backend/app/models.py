@@ -172,6 +172,15 @@ class AnalysisOptions(BaseModel):
         default="gemini-3.1-flash-lite",
         description="Identifier of the Gemini model to invoke.",
     )
+    structural_pass: bool = Field(
+        default=False,
+        description=(
+            "When true, run a cheap structural pre-pass (Pass 0) before the "
+            "thematic layers: it extracts the interview's sections/phases and "
+            "injects them as context into the base layer to improve concept "
+            "extraction. Costs one extra AI call."
+        ),
+    )
     k_per_layer: Optional[List[int]] = Field(
         default=None,
         description=(
@@ -238,6 +247,14 @@ class AnalysisMetadata(BaseModel):
     model: str = Field(default="", description="Gemini model actually used.")
     language: Language = Field(default="es", description="Analysis language used.")
     source_filename: Optional[str] = Field(default=None)
+    structural_themes: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Structural sections/phases extracted by the Pass 0 pre-pass (empty "
+            "when the structural pass was disabled). Persisted so future fusions "
+            "can carry each project's structure forward."
+        ),
+    )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         description="UTC timestamp when the response was generated.",

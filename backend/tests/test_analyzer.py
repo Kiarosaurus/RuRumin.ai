@@ -161,6 +161,68 @@ async def test_forced_runs_per_layer(monkeypatch):
     assert resp.metadata.total_runs == 10
 
 
+# --------------------------------------------------------------------------- #
+# 8. Pass 0 structural pre-pass
+# --------------------------------------------------------------------------- #
+STRUCTURAL_JSON = json.dumps(
+    {"temas_estructurales": ["(一）experiencia previa", "(二）expectativas"]}
+)
+
+
+async def test_structural_pass_injects_themes_and_counts_extra_call(monkeypatch):
+    monkeypatch.setattr(analyzer, "RUNS_PER_LAYER", 1)
+    # First call answers Pass 0; the rest answer the two thematic layers.
+    gen = install_fake_client(
+        monkeypatch,
+        side_effect=[
+            gemini_response(STRUCTURAL_JSON),
+            gemini_response(VALID_JSON),
+            gemini_response(VALID_JSON),
+        ],
+    )
+    request = AnalysisRequest(
+        transcript_text="el costo importa",
+        language="es",
+        options={"max_layers": 2, "k_top": 1, "structural_pass": True},
+    )
+
+    resp = await analyzer.run_thematic_analysis(request)
+
+    # 1 structural + 2 layers x 1 run = 3 calls; the extra Pass 0 is tallied.
+    assert gen.call_count == 3
+    assert resp.metadata.total_runs == 3
+    assert resp.metadata.structural_themes == [
+        "(一）experiencia previa",
+        "(二）expectativas",
+    ]
+    # The base-layer prompt carried the structural sections as context.
+    base_prompt = gen.call_args_list[1].kwargs["contents"]
+    assert "(一）experiencia previa" in base_prompt
+
+
+async def test_structural_pass_failure_does_not_sink_analysis(monkeypatch):
+    monkeypatch.setattr(analyzer, "RUNS_PER_LAYER", 1)
+    gen = install_fake_client(
+        monkeypatch,
+        side_effect=[
+            gemini_response("no json {"),  # Pass 0 fails to validate
+            gemini_response(VALID_JSON),
+            gemini_response(VALID_JSON),
+        ],
+    )
+    request = AnalysisRequest(
+        transcript_text="el costo importa",
+        language="es",
+        options={"max_layers": 2, "k_top": 1, "structural_pass": True},
+    )
+
+    resp = await analyzer.run_thematic_analysis(request)
+
+    assert resp.root_layer.winning_concepts[0].label == "Costo"
+    assert resp.metadata.structural_themes == []  # degraded gracefully
+    assert gen.call_count == 3
+
+
 async def test_malformed_run_tolerated_if_another_run_is_valid(monkeypatch):
     monkeypatch.setattr(analyzer, "RUNS_PER_LAYER", 3)
     # Layer 0: first run malformed, next two valid -> layer still succeeds.

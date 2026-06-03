@@ -28,7 +28,7 @@ from google.genai import types as genai_types
 from pydantic import ValidationError
 
 from app.config import get_gemini_api_key, get_runs_per_layer
-from app.llm_schema import LayerLLMOutput
+from app.llm_schema import LayerLLMOutput, StructuralLLMOutput
 from app.models import (
     AnalysisLayer,
     AnalysisMetadata,
@@ -36,7 +36,7 @@ from app.models import (
     AnalysisResponse,
     AnalysisStatus,
 )
-from app.prompts import build_layer_prompt
+from app.prompts import build_layer_prompt, build_structural_prompt
 from app.rate_limiter import LIMITER, Emit, _noop
 from app.services.aggregation import aggregate_layer
 from app.services.embeddings import embed_texts
@@ -136,6 +136,12 @@ async def run_thematic_analysis(
     effective_runs = runs if runs and runs > 0 else RUNS_PER_LAYER
     await emit({"type": "progress", "phase": "starting", "max_layers": max_layers})
 
+    # Optional Pass 0: extract the interview's structural skeleton first so it can
+    # be injected as context into the base layer (and persisted for fusions).
+    structural_themes: list[str] = []
+    if request.options.structural_pass:
+        structural_themes = await extract_structural_themes(request, emit=emit)
+
     root_layer = await _analyze_layer(
         request=request,
         text_chunk=request.transcript_text,
@@ -143,22 +149,59 @@ async def run_thematic_analysis(
         k_per_layer=k_per_layer,
         runs=effective_runs,
         emit=emit,
+        structural_themes=structural_themes,
     )
 
     await emit({"type": "progress", "phase": "finalizing"})
     total_layers = _count_layers(root_layer)
+    # Pass 0 adds exactly one extra call to the run tally when enabled.
+    structural_runs = 1 if request.options.structural_pass else 0
     return AnalysisResponse(
         request_id=str(uuid.uuid4()),
         status=AnalysisStatus.COMPLETED,
         root_layer=root_layer,
         metadata=AnalysisMetadata(
             total_layers=total_layers,
-            total_runs=total_layers * effective_runs,  # forced runs per layer
+            total_runs=total_layers * effective_runs + structural_runs,
             model=request.options.model,
             language=request.language,
             source_filename=request.source_filename,
+            structural_themes=structural_themes,
         ),
     )
+
+
+async def extract_structural_themes(
+    request: AnalysisRequest,
+    emit: Emit = _noop,
+) -> list[str]:
+    """
+    Run the Pass 0 structural pre-pass and return the detected sections/phases.
+
+    Sends the transcript through the structural prompt, validates the model's
+    JSON (`StructuralLLMOutput`) and returns the verbatim section/phase headings.
+    A failure here must never sink the whole analysis: any error (cascade
+    exhausted, schema drift) is logged and an empty list is returned so the
+    thematic layers still run, simply without structural context.
+    """
+    await emit({"type": "progress", "phase": "structural"})
+    prompt = build_structural_prompt(request.transcript_text, request.language)
+    try:
+        raw_output = await _call_gemini(
+            prompt=prompt,
+            language=request.language,
+            emit=emit,
+            level=0,
+            run=1,
+            runs=1,
+        )
+        themes = StructuralLLMOutput.parse_model_text(raw_output).temas_estructurales
+    except (ValidationError, ValueError, HTTPException) as exc:
+        logger.warning("Pass 0 estructural falló (%s). Continuando sin contexto.", exc)
+        return []
+    cleaned = [t.strip() for t in themes if t.strip()]
+    logger.info("Pass 0 estructural: %d secciones detectadas.", len(cleaned))
+    return cleaned
 
 
 async def _analyze_layer(
@@ -168,6 +211,7 @@ async def _analyze_layer(
     k_per_layer: list[int],
     runs: int,
     emit: Emit = _noop,
+    structural_themes: list[str] | None = None,
 ) -> AnalysisLayer:
     """
     Run one layer (prompt -> model -> validate -> map) and recurse on winners.
@@ -175,6 +219,9 @@ async def _analyze_layer(
     ``k_per_layer`` is the precomputed pyramid: ``k_per_layer[level]`` winners are
     kept at this depth, strictly fewer than the layer below, converging to 1 at
     the apex (see ``pyramidal_k_sequence``).
+
+    ``structural_themes`` (Pass 0 output) is injected only into the base layer's
+    prompt; deeper recursive layers do not carry it.
     """
     max_layers = request.options.max_layers
     # Pyramidal width for this layer (apex converges to 1).
@@ -190,13 +237,15 @@ async def _analyze_layer(
         }
     )
 
-    # 1. build the prompt for this layer in the requested language
+    # 1. build the prompt for this layer in the requested language. Structural
+    #    context (Pass 0) only enriches the base layer (level 0).
     prompt = build_layer_prompt(
         current_layer=level,
         interview_text_chunk=text_chunk,
         k_top=k,
         language=request.language,
         max_layers=max_layers,
+        structural_themes=structural_themes if level == 0 else None,
     )
 
     # 2. forced repetition: run the cascade `runs` times CONCURRENTLY. Sequential

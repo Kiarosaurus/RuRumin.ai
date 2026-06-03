@@ -68,6 +68,37 @@ class DescartadoLLM(BaseModel):
     )
 
 
+class StructuralLLMOutput(BaseModel):
+    """
+    JSON object returned by the Pass 0 structural pre-pass.
+
+    A single Spanish key `temas_estructurales` holding the verbatim section/phase
+    headings the model detected in the transcript. Tolerates the near-miss key
+    `secciones` the model occasionally drifts to.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    temas_estructurales: List[str] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("temas_estructurales", "secciones"),
+        description="Encabezados de sección/fase detectados en la transcripción.",
+    )
+
+    @classmethod
+    def parse_model_text(cls, raw_text: str) -> "StructuralLLMOutput":
+        """Parse/validate raw model text, tolerating a ```json fenced block."""
+        cleaned = raw_text.strip()
+        if cleaned.startswith("```"):
+            lines = cleaned.splitlines()
+            if lines and lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            cleaned = "\n".join(lines).strip()
+        return cls.model_validate_json(cleaned)
+
+
 class LayerLLMOutput(BaseModel):
     """Full JSON object returned by one Gemini layer run."""
 

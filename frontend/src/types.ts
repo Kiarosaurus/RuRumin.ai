@@ -82,6 +82,12 @@ export interface AnalysisOptions {
   /** Identifier of the Gemini model to invoke. */
   model: string;
   /**
+   * When true, run a structural pre-pass (Pass 0) before the thematic layers:
+   * it extracts the interview's sections/phases and injects them as context into
+   * the base layer. Costs one extra AI call.
+   */
+  structural_pass?: boolean;
+  /**
    * Explicit per-layer winner counts for the pyramidal synthesis (manual mode).
    * When set, overrides the auto sequence: length must equal `max_layers`, be
    * strictly decreasing, and end in 1. Index 0 is the widest base layer.
@@ -113,6 +119,12 @@ export interface AnalysisMetadata {
   language: Language;
   /** Original .docx filename, if provided. */
   source_filename?: string | null;
+  /**
+   * Structural sections/phases extracted by the Pass 0 pre-pass (empty when the
+   * structural pass was disabled). Persisted so future fusions can carry each
+   * project's structure forward.
+   */
+  structural_themes?: string[];
   /** ISO-8601 UTC timestamp when the response was generated. */
   created_at: string;
 }
@@ -123,6 +135,7 @@ export interface AnalysisMetadata {
  */
 export type ProgressPhase =
   | "starting"
+  | "structural"
   | "layer_start"
   | "calling_model"
   | "rate_limit_wait"

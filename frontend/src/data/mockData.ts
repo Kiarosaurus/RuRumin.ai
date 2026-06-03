@@ -19,6 +19,11 @@ export interface AnalysisRecord {
   timestamp: string;
   /** Layer depth configured for this run (min 2). */
   max_layers: number;
+  /**
+   * Structural sections/phases from the Pass 0 pre-pass (empty/omitted when the
+   * structural pass was off). Kept so a later fusion can carry them forward.
+   */
+  structural_themes?: string[];
   /** The analysis tree returned by the backend for this run. */
   result: AnalysisResponse;
 }

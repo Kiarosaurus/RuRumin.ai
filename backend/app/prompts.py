@@ -174,6 +174,133 @@ _INPUT_LABEL: dict[Language, str] = {
     "zh": "待分析的輸入：",
 }
 
+# --------------------------------------------------------------------------- #
+# Pass 0 — Structural pre-pass
+#
+# Before the thematic layers run, an optional cheap pass reads the transcript
+# and extracts its STRUCTURAL skeleton: the chapters, sections or interview
+# phases the conversation is organised into (e.g. "(一）過去使用交友軟體的經驗").
+# These structural_themes are then injected as context into the Layer 0 prompt so
+# the model groups concepts with the interview's own structure in mind, and they
+# are persisted in the analysis metadata for future fusions.
+# --------------------------------------------------------------------------- #
+
+# Output schema for Pass 0. Key stays Spanish (Pydantic invariant); values are
+# verbatim section/phase headings copied from the transcript in its own language.
+_STRUCTURAL_SCHEMA_BLOCK = """\
+{
+  "temas_estructurales": ["...", "..."]
+}"""
+
+_STRUCTURAL_INSTRUCTIONS: dict[Language, str] = {
+    "es": """\
+Rol: Eres un analista que mapea la ESTRUCTURA de una transcripción de entrevista.
+
+Tarea: Lee el texto e identifica únicamente su esqueleto estructural: los \
+capítulos, secciones, bloques o fases de la entrevista en los que se organiza la \
+conversación (por ejemplo encabezados de tema, etapas como "(一）experiencia \
+previa…", apartados numerados o preguntas-guía que abren un bloque).
+
+Reglas:
+- Copia los títulos/encabezados de sección de forma TEXTUAL tal como aparecen en \
+el texto; respeta su numeración y redacción originales.
+- Devuelve las secciones en el ORDEN en que aparecen.
+- NO resumas el contenido ni extraigas conceptos temáticos: solo la estructura.
+- Si el texto no tiene secciones explícitas, infiere de 3 a 6 fases naturales de \
+la entrevista y descríbelas con frases cortas.""",
+    "en": """\
+Role: You are an analyst who maps the STRUCTURE of an interview transcript.
+
+Task: Read the text and identify only its structural skeleton: the chapters, \
+sections, blocks or interview phases the conversation is organised into (e.g. \
+topic headings, stages such as "(一）prior experience…", numbered sections or \
+guiding questions that open a block).
+
+Rules:
+- Copy the section titles/headings VERBATIM as they appear in the text; keep \
+their original numbering and wording.
+- Return the sections in the ORDER they appear.
+- Do NOT summarise the content or extract thematic concepts: structure only.
+- If the text has no explicit sections, infer 3 to 6 natural interview phases \
+and describe each with a short phrase.""",
+    "zh": """\
+角色：你是一名分析師，負責標示訪談記錄的「結構」。
+
+任務：閱讀文本，僅辨識其結構骨架：對話所組織的章節、段落、區塊或訪談階段\
+（例如主題標題、像「(一）過去使用交友軟體的經驗」這樣的階段、編號小節，\
+或開啟某一區塊的引導問題）。
+
+規則：
+- 逐字（VERBATIM）複製文本中出現的段落標題／小標，保留其原始編號與用字。
+- 依照它們在文本中出現的「順序」返回。
+- 不要摘要內容，也不要提取主題概念：只要結構。
+- 若文本沒有明確的分節，請推斷 3 至 6 個自然的訪談階段，並各用一句短語描述。""",
+}
+
+# Hard directive for Pass 0: JSON only, single Spanish key.
+_STRUCTURAL_DIRECTIVE: dict[Language, str] = {
+    "es": (
+        "RESTRICCIÓN DE SALIDA (INVIOLABLE): responde ÚNICA y EXCLUSIVAMENTE con "
+        "un objeto JSON válido, sin Markdown. La clave debe ser EXACTAMENTE "
+        '"temas_estructurales" (en español) y su valor una lista de strings.'
+    ),
+    "en": (
+        "OUTPUT CONSTRAINT (INVIOLABLE): respond with ONE valid JSON object ONLY, "
+        'no Markdown. The key must be EXACTLY "temas_estructurales" (in Spanish) '
+        "and its value a list of strings."
+    ),
+    "zh": (
+        "輸出約束（不可違反）：只能返回一個有效的 JSON 物件，不要使用 Markdown。"
+        '鍵必須嚴格為 "temas_estructurales"（西班牙語），其值為字串陣列。'
+    ),
+}
+
+# Localized header for the structural-context block injected into Layer 0.
+_STRUCTURAL_CONTEXT_LABEL: dict[Language, str] = {
+    "es": (
+        "Estructura de la entrevista (secciones/fases detectadas en una pasada "
+        "previa). Considéralas para agrupar los conceptos respetando el hilo "
+        "estructural del texto:"
+    ),
+    "en": (
+        "Interview structure (sections/phases detected in a previous pass). Take "
+        "them into account when grouping concepts so the structural thread of the "
+        "text is respected:"
+    ),
+    "zh": (
+        "訪談結構（在前一次預先掃描中偵測到的段落／階段）。請在歸納概念時將其納入考量，"
+        "以尊重文本的結構脈絡："
+    ),
+}
+
+
+def build_structural_prompt(transcript_text: str, language: Language) -> str:
+    """
+    Render the Pass 0 prompt that extracts the transcript's structural skeleton.
+
+    The model returns a single JSON object ``{"temas_estructurales": [...]}`` whose
+    values are verbatim section/phase headings in `language`. Validated by
+    `app.llm_schema.StructuralLLMOutput`.
+    """
+    instructions = _STRUCTURAL_INSTRUCTIONS[language]
+    directive = _STRUCTURAL_DIRECTIVE[language]
+    label = _INPUT_LABEL[language]
+    return (
+        f"{instructions}\n\n{directive}\n\n{_STRUCTURAL_SCHEMA_BLOCK}\n{label}\n"
+        f'"{transcript_text}"\n'
+    )
+
+
+def _structural_context_block(
+    structural_themes: list[str] | None, language: Language
+) -> str:
+    """Render the injected structural-context block, or '' when there is none."""
+    themes = [t.strip() for t in (structural_themes or []) if t.strip()]
+    if not themes:
+        return ""
+    bullets = "\n".join(f"- {t}" for t in themes)
+    return f"{_STRUCTURAL_CONTEXT_LABEL[language]}\n{bullets}"
+
 # Appended only on the LAST layer: force convergence into a single general
 # concept (the root idea that summarizes the whole interview).
 _FINAL_LAYER_DIRECTIVE: dict[Language, str] = {
@@ -202,6 +329,7 @@ def build_layer_prompt(
     k_top: int,
     language: Language,
     max_layers: int = 5,
+    structural_themes: list[str] | None = None,
 ) -> str:
     """
     Render the layer-analysis prompt for one Gemini run in `language`.
@@ -210,6 +338,10 @@ def build_layer_prompt(
     Spanish keys) is invariant across languages. On the final layer
     (`current_layer == max_layers - 1`) a directive is appended instructing the
     model to converge everything into a single general concept.
+
+    When `structural_themes` is provided (Pass 0 output, injected only on the
+    base layer by the orchestrator) a structural-context block is added so the
+    model groups concepts in line with the interview's own sections/phases.
     """
     instructions = _INSTRUCTIONS[language].format(
         current_layer=current_layer,
@@ -217,6 +349,9 @@ def build_layer_prompt(
     )
     if current_layer >= max_layers - 1:
         instructions = f"{instructions}\n\n{_FINAL_LAYER_DIRECTIVE[language]}"
+    context = _structural_context_block(structural_themes, language)
+    if context:
+        instructions = f"{instructions}\n\n{context}"
     schema = _JSON_SCHEMA_BLOCK.format(current_layer=current_layer)
     directive = _KEY_DIRECTIVE[language]
     label = _INPUT_LABEL[language]

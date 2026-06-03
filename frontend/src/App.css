@@ -716,6 +716,27 @@ button:disabled .spinner {
   gap: 0.6rem;
 }
 
+.config-structural {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.85rem;
+  color: #475569;
+  cursor: pointer;
+}
+
+.config-structural input {
+  margin-top: 0.15rem;
+  accent-color: var(--accent);
+}
+
+.config-structural-text {
+  line-height: 1.35;
+}
+
 .config-layers-count {
   display: flex;
   align-items: center;

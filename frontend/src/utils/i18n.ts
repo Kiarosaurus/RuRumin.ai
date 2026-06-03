@@ -55,6 +55,7 @@ export type UIKey =
   | "toast.error"
   | "toast.unexpected"
   | "progress.starting"
+  | "progress.structural"
   | "progress.layer_start"
   | "progress.calling_model"
   | "progress.rate_limit_wait"
@@ -75,6 +76,7 @@ export type UIKey =
   | "config.autoDesc"
   | "config.manual"
   | "config.manualDesc"
+  | "config.structural"
   | "config.layersCount"
   | "config.layer"
   | "config.base"
@@ -149,6 +151,7 @@ const ES: Record<UIKey, string> = {
   "toast.error": "Error {status}",
   "toast.unexpected": "Fallo inesperado",
   "progress.starting": "Preparando análisis…",
+  "progress.structural": "Detectando la estructura de la entrevista (Pasada 0)…",
   "progress.layer_start": "Analizando layer {layer} de {max}…",
   "progress.calling_model":
     "Consultando a {model} · Run {run}/{runs} (intento {attempt})…",
@@ -171,6 +174,8 @@ const ES: Record<UIKey, string> = {
   "config.autoDesc": "Gemini decide la estructura (mínimo 3 capas).",
   "config.manual": "Manual",
   "config.manualDesc": "Define cuántos conceptos tendrá cada capa.",
+  "config.structural":
+    "Considerar los temas/secciones estructurales de la entrevista (1 pasada de IA extra)",
   "config.layersCount": "Número de capas",
   "config.layer": "Capa {n}",
   "config.base": "base",
@@ -247,6 +252,7 @@ const EN: Record<UIKey, string> = {
   "toast.error": "Error {status}",
   "toast.unexpected": "Unexpected failure",
   "progress.starting": "Preparing analysis…",
+  "progress.structural": "Detecting the interview's structure (Pass 0)…",
   "progress.layer_start": "Analyzing layer {layer} of {max}…",
   "progress.calling_model":
     "Calling {model} · Run {run}/{runs} (attempt {attempt})…",
@@ -269,6 +275,8 @@ const EN: Record<UIKey, string> = {
   "config.autoDesc": "Gemini decides the structure (minimum 3 layers).",
   "config.manual": "Manual",
   "config.manualDesc": "Set how many concepts each layer keeps.",
+  "config.structural":
+    "Consider the interview's structural themes/sections (1 extra AI pass)",
   "config.layersCount": "Number of layers",
   "config.layer": "Layer {n}",
   "config.base": "base",
@@ -345,6 +353,7 @@ const ZH: Record<UIKey, string> = {
   "toast.error": "錯誤 {status}",
   "toast.unexpected": "意外錯誤",
   "progress.starting": "正在準備分析…",
+  "progress.structural": "正在偵測訪談的結構（第 0 次預掃描）…",
   "progress.layer_start": "正在分析第 {layer} / {max} 層…",
   "progress.calling_model":
     "正在呼叫 {model} · 第 {run}/{runs} 次執行（第 {attempt} 次嘗試）…",
@@ -366,6 +375,7 @@ const ZH: Record<UIKey, string> = {
   "config.autoDesc": "由 Gemini 決定結構（至少 3 層）。",
   "config.manual": "手動",
   "config.manualDesc": "設定每一層保留多少個概念。",
+  "config.structural": "考量訪談的結構主題／段落（額外 1 次 AI 掃描）",
   "config.layersCount": "層數",
   "config.layer": "第 {n} 層",
   "config.base": "底層",
