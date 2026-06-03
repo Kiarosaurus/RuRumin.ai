@@ -114,9 +114,11 @@ async def merge_projects_stream(request: MergeRequest) -> StreamingResponse:
     Fuse the accepted concepts of >= 2 projects into their shared macro-themes,
     streaming live progress (same NDJSON event contract as analyze/stream).
 
-    The terminal success line carries BOTH the analysis tree and the synthetic
-    corpus the fusion ran over (so the UI can highlight against it):
-      {"type": "result", "data": {AnalysisResponse}, "transcript_text": "..."}
+    The terminal success line carries the analysis tree, the full synthetic
+    corpus the fusion ran over, and the per-document source blocks the UI stacks
+    and highlights independently (filterable stacked view):
+      {"type": "result", "data": {AnalysisResponse}, "transcript_text": "...",
+       "sources": [{"source_filename": "...", "text": "..."}]}
 
     Pydantic already rejects fewer than 2 projects with 422; an all-empty
     concept set (nothing to fuse) is rejected here with 400.
@@ -135,12 +137,13 @@ async def merge_projects_stream(request: MergeRequest) -> StreamingResponse:
 
     async def run() -> None:
         try:
-            response, text = await merge.run_project_merge(request, emit=emit)
+            response, text, sources = await merge.run_project_merge(request, emit=emit)
             await queue.put(
                 {
                     "type": "result",
                     "data": jsonable_encoder(response),
                     "transcript_text": text,
+                    "sources": sources,
                 }
             )
         except HTTPException as exc:

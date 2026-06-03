@@ -255,7 +255,7 @@ export default function App() {
           ...(config.structural_pass ? { structural_pass: true } : {}),
           ...(config.k_per_layer ? { k_per_layer: config.k_per_layer } : {}),
         };
-        const { analysis, transcript_text } = await mergeProjectsStream(
+        const { analysis, transcript_text, sources } = await mergeProjectsStream(
           projects,
           language,
           onProgress,
@@ -279,6 +279,12 @@ export default function App() {
           analyses: [record],
           kind: "fusion",
           source_filenames: docs.map((d) => d.filename),
+          // Per-document blocks for the filterable stacked fusion reader. Fall
+          // back to a single synthetic-corpus block for older/empty responses.
+          fusion_sources:
+            sources.length > 0
+              ? sources
+              : [{ source_filename: name, text: transcript_text }],
         };
         setDocuments((prev) => [doc, ...prev]);
         openDoc(doc);
@@ -399,7 +405,11 @@ export default function App() {
         )}
         {view === "fusion" && activeAnalysis && active && (
           <FusionView
-            transcriptText={active.transcript_text}
+            sources={
+              active.fusion_sources ?? [
+                { source_filename: active.filename, text: active.transcript_text },
+              ]
+            }
             analysis={activeAnalysis.result}
             language={language}
           />

@@ -18,6 +18,7 @@ from app.models import MergeConcept, MergeProject, MergeRequest
 from app.services.merge import (
     MERGE_RUNS_PER_LAYER,
     build_merge_corpus,
+    build_merge_sources,
     run_project_merge,
 )
 from tests.conftest import gemini_response, install_fake_client
@@ -82,6 +83,16 @@ def test_corpus_includes_structural_sections():
     assert "Secciones: (一）precio" in corpus
 
 
+def test_sources_split_per_document_for_stacked_view():
+    sources = build_merge_sources(_request())
+    # One block per project, each with only its own concepts.
+    assert [s["source_filename"] for s in sources] == ["a.docx", "b.docx"]
+    assert "Costo. importa" in sources[0]["text"]
+    assert "Confianza" not in sources[0]["text"]
+    assert "Confianza. clave" in sources[1]["text"]
+    assert "Costo" not in sources[1]["text"]
+
+
 def test_merge_requires_at_least_two_projects():
     with pytest.raises(ValidationError):
         MergeRequest(
@@ -101,7 +112,7 @@ async def test_merge_returns_tree_and_corpus(monkeypatch):
     monkeypatch.setattr(analyzer, "RUNS_PER_LAYER", 5)
     gen = install_fake_client(monkeypatch, return_value=gemini_response(VALID_JSON))
 
-    response, corpus = await run_project_merge(_request())  # max_layers=2
+    response, corpus, sources = await run_project_merge(_request())  # max_layers=2
 
     # 2 layers x 2 forced merge passes = 4 calls (override beats RUNS_PER_LAYER=5).
     assert gen.call_count == 4
@@ -109,6 +120,7 @@ async def test_merge_returns_tree_and_corpus(monkeypatch):
     assert response.metadata.source_filename == "Fusión"
     assert response.root_layer.winning_concepts[0].label == "Costo"
     assert corpus.strip() != ""
+    assert len(sources) == 2  # one stacked block per source document
 
 
 async def test_merge_uses_strict_cross_project_prompt(monkeypatch):

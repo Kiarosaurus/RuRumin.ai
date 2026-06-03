@@ -5,7 +5,7 @@
  * so the highlighting in the reader views works against real positions.
  */
 
-import type { AnalysisResponse, Language } from "../types";
+import type { AnalysisResponse, Language, MergeSource } from "../types";
 import { AnalysisStatus } from "../types";
 
 /**
@@ -45,6 +45,11 @@ export interface DocumentRecord {
   kind?: "document" | "fusion";
   /** For fusions: the filenames of the source projects that were merged. */
   source_filenames?: string[];
+  /**
+   * For fusions: each source document's own corpus block, rendered as a separate
+   * stacked text component so highlight overlap math stays local per document.
+   */
+  fusion_sources?: MergeSource[];
 }
 
 const SAMPLE_TRANSCRIPT = [

@@ -975,3 +975,54 @@ button:disabled .spinner {
 .fusion-pane-summary .reader {
   grid-template-columns: 1fr 300px;
 }
+
+/* Filterable stacked fusion reader. */
+.fusion-doc-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.doc-chip {
+  padding: 0.28rem 0.7rem;
+  font-size: 0.78rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #64748b;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.doc-chip.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.fusion-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.fusion-doc-block {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.5rem 0.75rem 0.75rem;
+  background: #fff;
+}
+
+.fusion-doc-title {
+  margin: 0 0 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.fusion-clear {
+  margin-bottom: 0.6rem;
+  font-size: 0.8rem;
+}

@@ -102,7 +102,11 @@ export type UIKey =
   | "fusion.select"
   | "fusion.needTwo"
   | "fusion.created"
-  | "fusion.name";
+  | "fusion.name"
+  | "fusion.sources"
+  | "fusion.doc"
+  | "fusion.noDocs"
+  | "fusion.clearSelection";
 
 const ES: Record<UIKey, string> = {
   "nav.home": "Inicio",
@@ -203,6 +207,10 @@ const ES: Record<UIKey, string> = {
   "fusion.needTwo": "Selecciona al menos 2 proyectos para fusionar.",
   "fusion.created": "«{name}» creada.",
   "fusion.name": "Fusión de {count} proyectos",
+  "fusion.sources": "Documentos de origen",
+  "fusion.doc": "Documento {n}",
+  "fusion.noDocs": "Activa al menos un documento para ver el texto.",
+  "fusion.clearSelection": "Quitar filtro de concepto",
 };
 
 const EN: Record<UIKey, string> = {
@@ -304,6 +312,10 @@ const EN: Record<UIKey, string> = {
   "fusion.needTwo": "Select at least 2 projects to merge.",
   "fusion.created": "“{name}” created.",
   "fusion.name": "Fusion of {count} projects",
+  "fusion.sources": "Source documents",
+  "fusion.doc": "Document {n}",
+  "fusion.noDocs": "Enable at least one document to see the text.",
+  "fusion.clearSelection": "Clear concept filter",
 };
 
 const ZH: Record<UIKey, string> = {
@@ -402,6 +414,10 @@ const ZH: Record<UIKey, string> = {
   "fusion.needTwo": "請至少選取 2 個專案進行融合。",
   "fusion.created": "已建立「{name}」。",
   "fusion.name": "{count} 個專案的融合",
+  "fusion.sources": "來源文件",
+  "fusion.doc": "文件 {n}",
+  "fusion.noDocs": "請至少啟用一個文件以檢視文字。",
+  "fusion.clearSelection": "清除概念篩選",
 };
 
 const TRANSLATIONS: Record<Language, Record<UIKey, string>> = {

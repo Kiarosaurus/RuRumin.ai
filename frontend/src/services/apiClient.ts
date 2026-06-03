@@ -11,6 +11,7 @@ import type {
   AnalysisResponse,
   Language,
   MergeProject,
+  MergeSource,
   ProgressEvent,
 } from "../types";
 
@@ -200,12 +201,19 @@ export interface MergeResult {
   analysis: AnalysisResponse;
   /** Synthetic concept corpus the fusion analyzed (used for highlighting). */
   transcript_text: string;
+  /** Per-document corpus blocks for the filterable stacked view. */
+  sources: MergeSource[];
 }
 
 /** One NDJSON line from the merge stream, before discrimination. */
 type MergeStreamMessage =
   | ProgressEvent
-  | { type: "result"; data: AnalysisResponse; transcript_text: string }
+  | {
+      type: "result";
+      data: AnalysisResponse;
+      transcript_text: string;
+      sources?: MergeSource[];
+    }
   | { type: "error"; status: number; detail: string };
 
 /**
@@ -268,7 +276,11 @@ export async function mergeProjectsStream(
     if (msg.type === "progress") {
       onProgress(msg);
     } else if (msg.type === "result") {
-      result = { analysis: msg.data, transcript_text: msg.transcript_text };
+      result = {
+        analysis: msg.data,
+        transcript_text: msg.transcript_text,
+        sources: msg.sources ?? [],
+      };
     } else if (msg.type === "error") {
       throw new ApiError(msg.status, msg.detail);
     }

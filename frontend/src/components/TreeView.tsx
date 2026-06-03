@@ -40,6 +40,13 @@ import { tr } from "../utils/i18n";
 interface Props {
   analysis: AnalysisResponse;
   language: Language;
+  /**
+   * Clicking a concept node calls this with its id. Used by the fusion view to
+   * filter the stacked reader to that macro-concept's supporting phrases.
+   */
+  onConceptClick?: (conceptId: string) => void;
+  /** Currently selected concept id (outlines the matching node). */
+  selectedConceptId?: string | null;
 }
 
 const NODE_W = 184;
@@ -230,13 +237,23 @@ function buildDag(
 }
 
 /** Inner flow: lives inside ReactFlowProvider so it can drive the viewport. */
-function TreeFlow({ analysis, language }: Props) {
+function TreeFlow({ analysis, language, onConceptClick, selectedConceptId }: Props) {
   const [showPhrases, setShowPhrases] = useState(true);
   const { fitView } = useReactFlow();
   const { nodes, edges } = useMemo(
     () => buildDag(analysis, showPhrases),
     [analysis, showPhrases],
   );
+
+  // Outline the selected concept node so the DAG and the stacked reader agree.
+  const decorated = useMemo(() => {
+    if (!selectedConceptId) return nodes;
+    return nodes.map((n) =>
+      n.id === selectedConceptId
+        ? { ...n, style: { ...n.style, boxShadow: "0 0 0 3px #6366f1" } }
+        : n,
+    );
+  }, [nodes, selectedConceptId]);
 
   // Re-center the tree whenever the phrase leaves are toggled. Deferred a frame
   // so reactflow has ingested the new node set before we fit to it.
@@ -255,7 +272,19 @@ function TreeFlow({ analysis, language }: Props) {
 
   return (
     <div className="tree-view">
-      <ReactFlow nodes={nodes} edges={edges} fitView minZoom={0.2} maxZoom={2}>
+      <ReactFlow
+        nodes={decorated}
+        edges={edges}
+        fitView
+        minZoom={0.2}
+        maxZoom={2}
+        onNodeClick={(_, node) => {
+          // Phrase leaf nodes are not selectable concepts.
+          if (onConceptClick && !node.id.startsWith("phrase-")) {
+            onConceptClick(node.id);
+          }
+        }}
+      >
         <Panel position="top-left">
           <button className="tree-toggle" onClick={() => setShowPhrases((v) => !v)}>
             {tr(language, showPhrases ? "tree.hidePhrases" : "tree.showPhrases")}

@@ -207,3 +207,14 @@ export interface MergeRequest {
   language: Language;
   options?: AnalysisOptions;
 }
+
+/**
+ * One source document's corpus block in a fusion result. Rendered as its own
+ * stacked text component so highlight overlap math is computed against a local
+ * string and never breaks across documents.
+ */
+export interface MergeSource {
+  source_filename: string | null;
+  /** This document's lean corpus block (concept names + justifications). */
+  text: string;
+}
